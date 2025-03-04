@@ -1,0 +1,60 @@
+import pandas as pd
+from datetime import datetime, timedelta
+
+class LiveData:
+    def __init__(self, logging):  # Fixed constructor
+        self.logging = logging
+        self.instruments_data = {}  # Initialized as an empty dictionary
+        self.order_updated = False
+
+    def collect(self, ticks):
+        for tick in ticks:
+            token = tick["instrument_token"]
+            price = tick["last_price"]
+
+            if token not in self.instruments_data:  # Fixed incorrect `.keys()`
+                self.instruments_data[token] = {'price': price, 'time': datetime.now(), 'track': False, 'high': 0}
+            else:
+                self.instruments_data[token]['price'] = price
+                self.instruments_data[token]['time'] = datetime.now()  # Update time on new data
+                if self.instruments_data[token]['track']:
+                    if price > self.instruments_data[token]['high']:
+                        self.instruments_data[token]['high'] = price
+
+    def to_s(self):
+        df = pd.DataFrame.from_dict(self.instruments_data, orient="index")
+        # df.reset_index(drop=True, inplace=True)
+        if len(df) > 0:
+            print('---------------------------------------------------------')
+            print(df)
+            print('---------------------------------------------------------')
+        
+    def get_current_data(self, token):  # Added `self`
+        if self.instruments_data is not None and token in self.instruments_data:
+            if (datetime.now() - self.instruments_data[token]['time']) <= timedelta(minutes=2): 
+                return self.instruments_data[token]
+        return None
+
+    def update_tracking_high_price(self, active_tokens):
+        for token, values in self.instruments_data.items():
+            if token in active_tokens:
+                if values["track"] == False:
+                    values["high"] = 0
+                    values["track"] = True   
+            else:
+                values["track"] = False
+                values["high"] = 0
+        
+    # def get_current_pattern(token, time_id):
+    #     data_5m["is_shooting_star"]     = data_5m.apply(lambda row: is_shooting_star(row.name, data_5m), axis=1)
+    #     data_5m["is_hammer"]            = data_5m.apply(lambda row: is_hammer(row.name, data_5m), axis=1)
+    #     data_5m["is_bearish_engulfing"] = data_5m.apply(lambda row: is_bearish_engulfing(row.name, data_5m), axis=1)
+    #     data_5m["is_bullish_engulfing"] = data_5m.apply(lambda row: is_bullish_engulfing(row.name, data_5m), axis=1)
+    #     data_5m["is_bearish_harami"]    = data_5m.apply(lambda row: is_bearish_harami(row.name, data_5m), axis=1)
+    #     data_5m["is_bullish_harami"]    = data_5m.apply(lambda row: is_bullish_harami(row.name, data_5m), axis=1)
+    #     data_5m["is_bullish_marubozu"]  = data_5m.apply(lambda row: is_bullish_marubozu(row.name, data_5m), axis=1)
+    #     data_5m["is_bearish_marubozu"]  = data_5m.apply(lambda row: is_bearish_marubozu(row.name, data_5m), axis=1)
+        
+    #     data_5m[time_id]
+		
+        
