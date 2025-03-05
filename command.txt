@@ -1,0 +1,5 @@
+To go to virtual python
+source vPython/bin/activate
+
+To start Jupyter
+jupyter lab
