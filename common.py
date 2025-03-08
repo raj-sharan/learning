@@ -27,6 +27,22 @@ class Util:
                 time.hour * 100 +
                 (time.minute // 5) * 5) 
 
+    def generate_2point5m_id(time):
+        if isinstance(time, str):
+            time = pd.to_datetime(time)
+    
+        # Determine the 2.5-minute offset within the 5-minute block (0 or 1)
+        second_offset = (time.second % 5) // 2.5  # Gives 0 or 1
+    
+        # Compute the integer ID
+        id_value = (time.year * 100000000 +
+                    time.month * 1000000 +
+                    time.day * 10000+
+                    time.hour * 100 +
+                    (time.minute // 5) * 5) * 10 + int(second_offset)
+        
+        return id_value
+
     @staticmethod
     def generate_30m_id(time):
         if isinstance(time, str):

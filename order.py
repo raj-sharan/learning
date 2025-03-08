@@ -195,7 +195,9 @@ class MarketOrder:
                     if self.target is None and instrument.historical_data_5m is not None:
                         parent_candle = instrument.get_5m_candle_at(placed_time)
                         if parent_candle:
-                            self.target = round(self.candle['high'] + 2 * parent_candle['ATR'] * 0.7, 2)
+                            # self.target = round(self.candle['high'] +  2 * parent_candle['ATR'], 2)
+                            self.target = round(self.candle['low'] +  parent_candle['ATR'], 2)
+                            
                     
             except Exception as e:
                 self.logging.error("Failed to get candle: {}".format(e))

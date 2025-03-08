@@ -1,0 +1,21 @@
+{
+    "api_key"     : "******",
+    "api_secret"  : "******",
+    "kite_id"     : "******",
+    "securities"  : {
+        "256265"  : {
+            "token": 256265,
+            "symbol": "NIFTY",
+            "index" : true,
+            "quantity": 75,
+            "price_step": 100
+        }
+    },
+    "db_name"     : "******",
+    "db_username" : "******",
+    "db_password" : "******",
+    "db_host"     : "******",
+    "db_port"     : "******",
+    "table_name_5m"  : "******",
+    "table_name_30m" : "******"
+}

@@ -26,7 +26,8 @@ def is_shooting_star(index, data):
 
     return (prev_body and prev_close + 2 >= open and close < open and close >= low > prev_open and
             high - max(open, close) >= abs(open - close) * 3 and candle_length and
-            min(close, open) - low <= abs(open - close) + 2
+            min(close, open) - low <= 2
+            #min(close, open) - low <= abs(open - close)
             and prev_open > prev_open_2)
 
 
@@ -56,8 +57,9 @@ def is_hammer(index, data):
 
     return (prev_body and prev_close - 2 <= open and close > open and close <= high < prev_open and
             min(open, close) - low >= abs(open - close) * 3 and candle_length and
-            high - max(close, open) <= abs(open - close) + 2 and
-            prev_open < prev_open_2)
+            # high - max(close, open) <= abs(open - close) + 2
+            high - max(close, open) <= 2
+            and prev_open < prev_open_2)
             
 
 def is_bearish_engulfing(index, data):
@@ -262,13 +264,13 @@ def is_bearish_marubozu(index, data):
 def valid_bulish_patterns(index, df):
     return (
         is_hammer(index, df) or
-        is_bullish_engulfing(index, df) or
-        is_bullish_marubozu(index, df)
+        is_bullish_engulfing(index, df)
+        # is_bullish_marubozu(index, df)
     )
 
 def valid_bearish_patterns(index, df):
     return (
         is_shooting_star(index, df) or
-        is_bearish_engulfing(index, df) or
-        is_bearish_marubozu(index, df)
+        is_bearish_engulfing(index, df)
+        # is_bearish_marubozu(index, df)
     )

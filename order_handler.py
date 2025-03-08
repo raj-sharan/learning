@@ -20,6 +20,7 @@ class OrderHandler:
         orders = self.kite_login.conn.positions()
         any_position = False
 
+        self.position_loaded_at = datetime.now()
         if not (orders and 'day' in orders):
             return None
     
@@ -78,6 +79,10 @@ class OrderHandler:
 
         for parent_token, instrument in instruments.items():
             for token, order in instrument.orders.items():
+                current_data = live_data.get_current_data(token)
+                price = current_data['price'] if current_data is not None else 0
+   
+                self.logging.info(f'Order ({token}), Target: {order.target}, SL: {order.stop_loss}, Last Price: {price}')
                 self.active_tokens.append(token)
                 if order.should_cancel_position(live_data):  
                     order.cancel_position(self.kite_login)
@@ -91,7 +96,7 @@ class OrderHandler:
                 if self.out_of_trading_session():
                     order.cancel_sl_order(self.kite_login)
                     if order.sl_order_id is None:
-                        order.cancle_position(self.kite_login)
+                        order.cancel_position(self.kite_login)
 
         live_data.update_tracking_high_price(self.active_tokens)
 

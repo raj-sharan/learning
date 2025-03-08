@@ -49,7 +49,7 @@ class KiteLogin:
             profile = self.conn.profile()
             if profile["user_id"] == self.setting.kite_id:
                 self.profile_name = profile["user_name"]
-                self.logging.info(f"User Profile: {profile}")
+                self.logging.info(f"User Profile: == * {self.profile_name} * ==")
                 return True
         except Exception as e:
             self.logging.error(f"Error checking connection: {e}")

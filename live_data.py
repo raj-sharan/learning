@@ -1,18 +1,27 @@
 import pandas as pd
 from datetime import datetime, timedelta
 
+from momentum_analyser import MomentumAnalyser
+
 class LiveData:
     def __init__(self, logging):  # Fixed constructor
         self.logging = logging
         self.instruments_data = {}  # Initialized as an empty dictionary
         self.order_updated = False
+        self.ticks_data = []
+        self.analyser = MomentumAnalyser()
 
-    def collect(self, ticks):
+    def load_ticks(self, ticks):
+        self.ticks_data.extend(ticks)
+    
+    def collect_instruments_data(self, ticks):
+        self.load_ticks(ticks)
+        
         for tick in ticks:
             token = tick["instrument_token"]
             price = tick["last_price"]
 
-            if token not in self.instruments_data:  # Fixed incorrect `.keys()`
+            if token not in self.instruments_data:
                 self.instruments_data[token] = {'price': price, 'time': datetime.now(), 'track': False, 'high': 0}
             else:
                 self.instruments_data[token]['price'] = price

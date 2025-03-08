@@ -72,16 +72,46 @@ historical_data_30m_sql = """
     ON historical_data_30m (token, date);
 """
 
+processed_details = """
+    CREATE TABLE IF NOT EXISTS processed_details (
+        id SERIAL PRIMARY KEY,
+        parent_token BIGINT NOT NULL,
+        unique_key BIGINT NOT NULL,
+        date TIMESTAMP NOT NULL,
+        sma_20 DECIMAL(10, 2) NOT NULL,
+        is_bullish BOOL NOT NULL DEFAULT FALSE,
+        is_bearish BOOL NOT NULL DEFAULT FALSE,
+        ce_token BIGINT NOT NULL,
+        ce_beta DECIMAL(10, 2) NOT NULL,
+        ce_oi DECIMAL(10, 2) NOT NULL,
+        ce_quantity DECIMAL(10, 2) NOT NULL,
+        pe_token BIGINT NOT NULL,
+        pe_beta DECIMAL(10, 2) NOT NULL,
+        pe_oi DECIMAL(10, 2) NOT NULL,
+        pe_quantity DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (parent_token, unique_key)
+    );
+
+    -- Add an index on (parent_token, unique_key)
+    CREATE UNIQUE INDEX processed_details_token_unique_key 
+    ON processed_details (parent_token, unique_key);
+    
+    -- Add an index on (parent_token, date) for faster date-based queries
+    CREATE INDEX processed_details_token_date 
+    ON processed_details (parent_token, date);
+"""
+
 setting = Setting()
 
 
 
 db = PostgresDB(setting)
-s = db.connect()
+s = db.connect(auto = True)
 print(s)
     
 # db.create_database("sharemarkets")
-db.create_tables(historical_test_data_5m_sql)
+db.create_tables(processed_details)
 
 db.close()
 

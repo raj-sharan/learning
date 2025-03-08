@@ -15,7 +15,7 @@ class PostgresDB:
         self.conn        = None
         self.cur         = None
 
-    def connect(self):
+    def connect(self, auto = False):
         """Establish a connection to the PostgreSQL database."""
         try:
             self.conn = psycopg2.connect(
@@ -25,7 +25,8 @@ class PostgresDB:
                 host     = self.db_host,
                 port     = self.db_port
             )
-            # self.conn.autocommit = True
+            if auto:
+                self.conn.autocommit = True
             self.cur = self.conn.cursor()
             print("✅ Connected to PostgreSQL successfully!")
         except Exception as e:

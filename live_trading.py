@@ -22,7 +22,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
 
 # Initialize
 setting = Setting()
-setting.set_request_token("fhoWYaxFxdh9s1srIhCZzoaZpbKHKDnU")
+setting.set_request_token("L47VWRvnLC9GLBTGsQl1AUij2qPLBnSt")
 
 kite_login = KiteLogin(setting, logging)
 kite_login.connect()
@@ -41,9 +41,9 @@ kws = KiteTicker(setting.api_key, kite_login.access_token, connect_timeout = 60*
             
 def on_ticks(ws, ticks):
     # Callback to receive ticks.
-    live_data.collect(ticks)
     # print("Ticks: {}".format(ticks))
-
+    live_data.collect_instruments_data(ticks)
+    
 def on_connect(ws, response):
     logging.info("on_connect: ".format(response))
     # Callback on successful connect.
@@ -100,8 +100,8 @@ subscribe_tokens = []
 def reload_data(token):
     if token not in instruments:
         is_index = Util.is_index_token(setting, token)
-        instruments[token] = Instrument(token, is_index, logging)
-        instruments[token].load_historical_data(setting)
+        instruments[token] = Instrument(token, is_index, setting, logging)
+        instruments[token].load_historical_data()
 
 def subscribe_strike_price_tokens(token):
     global subscribe_tokens
@@ -134,7 +134,7 @@ def subscribe_strike_price_tokens(token):
     if subscribe_tokens:
         logging.info(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
         kws.subscribe(subscribe_tokens)
-        kws.set_mode(kws.MODE_LTP, subscribe_tokens)
+        kws.set_mode(kws.MODE_FULL, subscribe_tokens)
     return subscribe_tokens
 
 def trading_windows():
@@ -175,7 +175,7 @@ while True:
             tokens = setting.reload().get_securities_tokens()
 
             kws.subscribe(tokens)
-            kws.set_mode(kws.MODE_LTP, tokens)
+            kws.set_mode(kws.MODE_FULL, tokens)
             subscribed_list.extend(tokens)
             
             for token in tokens:
@@ -195,6 +195,8 @@ while True:
                     
                 for token in instruments.keys():
                     if not instruments[token].order_ids():
+                        live_data.analyser.load_current_data(live_data)
+                        instruments[token].execute_trade_opportunity_with_beta(kite_login, live_data, instrument_token)
                         instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token)
                     
             order_handler.cancel_invalid_sl_orders(live_data, instruments)
