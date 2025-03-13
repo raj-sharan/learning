@@ -22,7 +22,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
 
 # Initialize
 setting = Setting()
-setting.set_request_token("L47VWRvnLC9GLBTGsQl1AUij2qPLBnSt")
+setting.set_request_token("J1hglC3owiYeibvYHbusPqK6ySxUdQlZ")
 
 kite_login = KiteLogin(setting, logging)
 kite_login.connect()
@@ -31,7 +31,7 @@ if kite_login.conn is None:
     logging.error("Unable to make kite connection")
     exit()
 
-live_data = LiveData(logging)
+live_data = LiveData(setting, logging)
 
 # Initialise
 # connect_timeout= 60*10 (10 minutes)
@@ -140,7 +140,7 @@ def subscribe_strike_price_tokens(token):
 def trading_windows():
     current_time = datetime.now()
     from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 0)
-    to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 30)
+    to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
 # Reload data for all tokens
@@ -160,9 +160,9 @@ except Exception as e:
 subscribed_list = []
 
 while True:
-    # if trading_windows():
-    #     logging.info("Main thread: Trading session ended")
-    #     exit()
+    if not trading_windows():
+        logging.info("Main thread: Trading session ended")
+        exit()
         
     subscribed_list.clear()
 
@@ -197,7 +197,7 @@ while True:
                     if not instruments[token].order_ids():
                         live_data.analyser.load_current_data(live_data)
                         instruments[token].execute_trade_opportunity_with_beta(kite_login, live_data, instrument_token)
-                        instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token)
+                        # instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token)
                     
             order_handler.cancel_invalid_sl_orders(live_data, instruments)
             
@@ -206,9 +206,9 @@ while True:
             kws.unsubscribe(list(unused_tokens))
         except Exception as e:
             logging.error(f"Error on loop: {e}")
-            if re.match('Error in connecting kite connect', e):
+            if re.match('Error in connecting kite connect', str(e)):
                 kite_login.connect()
-            # logging.error(traceback.format_exc())
+            logging.error(traceback.format_exc())
     else:
         kws.close()
         kws.connect(threaded=True)

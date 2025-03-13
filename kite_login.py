@@ -19,6 +19,7 @@ class KiteLogin:
             file_path = "config/session.txt"
             
             self.conn = KiteConnect(api_key = self.setting.api_key)
+            
             if os.path.exists(file_path):
                 with open(file_path, 'r') as file:
                     access_token = file.read()

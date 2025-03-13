@@ -1,28 +1,26 @@
-# chmod +x script.py
-# ./script.py
+#!/bin/sh
 
-# chmod +x db_migrations.py
-# ./db_migrations.py
+input="$1"  # Read first argument
 
-
-# chmod +x fill_database.py
-# ./fill_database.py
+echo "%$input%"  # Print the value
 
 
-# chmod +x moving_average_30m.py
-# ./moving_average_30m.py
+if [ "$input" = "dm" ]; then
+    chmod +x db_migrations.py
+    ./db_migrations.py
+fi
 
+if [ "$input" = "di" ]; then
+    chmod +x data_importer.py
+    ./data_importer.py
+fi
 
+if [ "$input" = "lt" ]; then
+    chmod +x live_trading.py
+    caffeinate -i ./live_trading.py
+fi
 
-# chmod +x candel.py
-# ./candel.py
-
-
-# chmod +x data_importer.py
-# ./data_importer.py
-
-chmod +x live_trading.py
-./live_trading.py
-
-
-
+if [ "$input" = "tp" ]; then
+    chmod +x trading_poc.py
+    ./trading_poc.py
+fi

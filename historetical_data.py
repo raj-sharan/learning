@@ -122,6 +122,52 @@ class HistoricalData:
         
         return self.save_data_to_db(full_data, self.setting.table_name_5m)
 
+    def sync_five_min_data_for_day(self, kite_login):
+        collected    = False
+        current_time = datetime.now()
+        started_at   = datetime.now()
+    
+        self.logging.info(f"Started fetching {self.token} at {started_at}")
+        columns   = ['date', 'open', 'high', 'low', 'close', 'volume']
+        full_data = pd.DataFrame(columns=columns)
+        count = 0
+        if True:
+            count = count + 1
+            self.logging.info(f"looping - {count}")
+            if datetime.now() - started_at > timedelta(minutes = 5):
+                self.logging.error(f"Taking too much time in fetching {self.token}, ending at {datetime.now()}")
+                return False
+    
+            start_day = current_time
+            end_day   = current_time
+
+            from_dt = datetime(start_day.year, start_day.month, start_day.day, 9, 0)
+            to_dt   = datetime(end_day.year, end_day.month, end_day.day, 16, 0)
+
+            self.logging.info(f"from_dt {from_dt} to_dt {to_dt}")
+            try:
+                data = kite_login.conn.historical_data(self.token, from_dt, to_dt, "5minute")
+            except Exception as e:
+                self.logging.error(f"Error in sync 5m pre-data for {self.token}: {e}")
+                return False
+    
+            data_df   = pd.DataFrame(data)
+            full_data = data_df.copy() if full_data.empty else pd.concat([full_data, data_df], ignore_index=True)
+    
+    
+        self.logging.info(f"Ended fetching {len(full_data)} data points for {self.token} at {datetime.now()}")
+
+        full_data = full_data.drop(columns = ["volume"])
+        full_data['date'] = full_data.apply(lambda row: Util.parse_datetime(row["date"]), axis=1)
+        full_data         = full_data.sort_values(by = 'date', ascending = True)
+
+        full_data["unique_key"] = full_data.apply(lambda row: Util.generate_5m_id(row["date"]), axis=1)
+        full_data["token"]      = full_data.apply(lambda row: self.token, axis=1)
+        
+        #full_data.to_csv('NIFTY50.csv')
+        
+        return self.save_data_to_db(full_data, self.setting.table_name_5m)
+        
     def sync_five_min_test_data(self, kite_login):
         collected    = False
         current_time = datetime.now()
@@ -284,6 +330,7 @@ class HistoricalData:
             self.db_conn.connect()
             query = f"TRUNCATE {table_name} RESTART IDENTITY"
             self.db_conn.execute_query(query)
+            self.db_conn.commit()
             executed = True
         except Exception as e:
             self.logging.error(f"Error cleaning records for {self.token}: {e}")

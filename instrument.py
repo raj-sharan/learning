@@ -34,7 +34,7 @@ class Instrument:
         self.historical_data_30m = historical_data.load_30min_data()
 
     def refresh_data(self, kite_login):
-        current_time = datetime.now() - timedelta(hours = 2*24-12)
+        current_time = datetime.now()
         # current_time = datetime(current_time.year, 2, 28, 14, 15)
         end_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 30)
         if current_time > end_dt:
@@ -183,7 +183,7 @@ class Instrument:
                     return None
                 ce_price = ce_curr_data['price']
 
-                if ce_candle['low'] < ce_price and ce_price - stop_loss <= 20 and target - ce_candle['high'] > 15:
+                if ce_candle['low'] < ce_price and ce_price - stop_loss <= 20:
                     self.logging.info(f'CE BUY Order: ce_token - {ce_token}, ce_symbol - {ce_symbol}, ce_price - {ce_price}, stop_loss - {stop_loss}, target - {target}')
                     self.logging.info(ce_candle)
                     
@@ -249,7 +249,7 @@ class Instrument:
                     return None
                 pe_price = pe_curr_data['price']
                
-                if pe_candle['low'] < pe_price and pe_price - stop_loss <= 20 and target - pe_candle['high'] > 15:
+                if pe_candle['low'] < pe_price and pe_price - stop_loss <= 20:
                     self.logging.info(f'PE BUY Order: pe_token - {pe_token}, pe_symbol - {pe_symbol}, pe_price - {pe_price}, stop_loss - {stop_loss}, target - {target}')
                     self.logging.info(pe_candle)
                     
@@ -271,62 +271,80 @@ class Instrument:
             # self.logging.error(traceback.format_exc())
 
     def execute_trade_opportunity_with_beta(self, kite_login, live_data, instrument_token):
-        candle_5m = self.historical_data_5m.iloc[-1]
-        unique_key = Util.generate_5m_id(candle_5m['date'])
-
-        if self.processed_key is not None and self.processed_key <= unique_key:
+        if self.low_margin_at is not None and datetime.now() - self.low_margin_at <= timedelta(minutes = 5):
             return True
 
-        sma_20 = candle_5m["SMA-20"]
-        candle_set = self.historical_data_5m.tail(3)
-        is_bulish = valid_bulish_patterns(len(candle_set) - 1, candle_set)
-        is_bearish = valid_bearish_patterns(len(candle_set) - 1, candle_set)
-
-        token_data = live_data.get_current_data(self.token)
-
-        if token_data is None:
-            return None
-        token_price = token_data['price']
+        current_time = datetime.now()
+        session_end_dt = datetime(current_time.year, current_time.month, current_time.day, 14, 55)
+        if self.refresh_till_5m is None or current_time > session_end_dt:
+            return
         
-        pe_ce_symbols = instrument_token.strike_price_tokens(self.token, token_data)
-        if pe_ce_symbols is None or not pe_ce_symbols['ce_tokens'] or not pe_ce_symbols['pe_tokens']:
-            return None
+        if current_time > self.refresh_till_5m and current_time - self.refresh_till_5m < timedelta(minutes = 5):     
+            candle_5m = self.historical_data_5m.iloc[-1]
+            unique_key = Util.generate_5m_id(candle_5m['date'])
+    
+            sma_20 = candle_5m["SMA-20"]
+            candle_set = self.historical_data_5m.tail(3)
+            is_bulish = valid_bulish_patterns(len(candle_set) - 1, candle_set)
+            is_bearish = valid_bearish_patterns(len(candle_set) - 1, candle_set)
 
-        ce_symbol = pe_ce_symbols['ce_tokens'][0]  # Get the first available CE token
-        pe_symbol = pe_ce_symbols['pe_tokens'][0]  # Get the first available PE token
+            if is_bulish or is_bearish:
+                token_data = live_data.get_current_data(self.token)
+        
+                if token_data is None:
+                    return None
+                token_price = token_data['price']
+                
+                pe_ce_symbols = instrument_token.strike_price_tokens(self.token, token_data)
+                if pe_ce_symbols is None or not pe_ce_symbols['ce_tokens'] or not pe_ce_symbols['pe_tokens']:
+                    return None
+        
+                ce_symbol = pe_ce_symbols['ce_tokens'][0]  # Get the first available CE token
+                pe_symbol = pe_ce_symbols['pe_tokens'][0]  # Get the first available PE token
+        
+                ce_token = instrument_token.get_token_by_symbol(ce_symbol)
+                pe_token = instrument_token.get_token_by_symbol(pe_symbol)
+                if ce_token is None or pe_token is None:
+                    return None
+        
+                momentums = live_data.analyser.analyse_momentum(candle_5m['date'], self.token, ce_token, pe_token)
+        
+                if not momentums:
+                    return None
+        
+                print(momentums['beta'])
+                print(momentums['corr'])
+                result = {
+                    'parent_token' : self.token,
+                    'unique_key': unique_key,
+                    'date': candle_5m['date'], 
+                    'sma-20': sma_20,
+                    'is_bulish': is_bulish,
+                    'is_bearish': is_bearish,
+                    'ce_token' : ce_token, 
+                    'ce_beta' : momentums['beta']['ce_beta'].round(2) if 'beta' in momentums else 0.0, 
+                    'ce_oi' : momentums['corr']['last_price']['oi_ce'].round(2)  if 'corr' in momentums else 0.0, 
+                    'ce_quantity': momentums['corr']['last_price']['quantity_ce'].round(2)  if 'corr' in momentums else 0.0, 
+                    'pe_token': pe_token, 
+                    'pe_beta': momentums['beta']['pe_beta'].round(2)  if 'beta' in momentums else 0.0, 
+                    'pe_oi': momentums['corr']['last_price']['oi_pe'].round(2)  if 'corr' in momentums else 0.0, 
+                    'pe_quantity': momentums['corr']['last_price']['quantity_pe'].round(2)  if 'corr' in momentums else 0.0
+                }
 
-        ce_token = instrument_token.get_token_by_symbol(ce_symbol)
-        pe_token = instrument_token.get_token_by_symbol(pe_symbol)
-        if ce_token is None or pe_token is None:
-            return None
-
-        momentums = live_data.analyser.analyse_momentum(candle_5m['date'], self.token, ce_token, pe_token)
-
-        if not momentums:
-            return None
-
-        result = {
-            'parent_token' : self.token,
-            'unique_key': unique_key,
-            'date': candle_5m['date'], 
-            'sma-20': sma_20,
-            'is_bulish': is_bulish,
-            'is_bearish': is_bearish,
-            'ce_token' : ce_token, 
-            'ce_beta' : momentums['beta']['ce_beta'] if 'beta' in momentums else 0.0, 
-            'ce_oi' : momentums['corr']['last_price_index']['oi_ce']  if 'corr' in momentums else 0.0, 
-            'ce_quantity': momentums['corr']['last_price_index']['last_traded_quantity_ce']  if 'corr' in momentums else 0.0, 
-            'pe_token': pe_token, 
-            'pe_beta': momentums['beta']['pe_beta']  if 'beta' in momentums else 0.0, 
-            'pe_oi': momentums['corr']['last_price_index']['oi_pe']  if 'corr' in momentums else 0.0, 
-            'pe_quantity': momentums['corr']['last_price_index']['last_traded_quantity_pe']  if 'corr' in momentums else 0.0
-        }
-        result_df = pd.DataFrame([result])
-
-        print(result_df)
-        if self.save_data_to_db(result_df):
-            self.processed_key = unique_key
-
+                if self.processed_key is None or unique_key > self.processed_key:
+                    result_df = pd.DataFrame([result])
+            
+                    if self.save_data_to_db(result_df):
+                        self.processed_key = unique_key
+        
+                pre_candle_5m = self.historical_data_5m.iloc[-2]
+                if is_bulish and sma_20 > pre_candle_5m["SMA-20"] + 0.1 and candle_5m["low"] <= sma_20 + 10:
+                    if abs(result['pe_beta']) > result['ce_beta']:
+                        self.buy_ce_premium(kite_login, live_data, instrument_token)
+        
+                if is_bearish and sma_20 < pre_candle_5m["SMA-20"] - 0.1 and candle_5m["high"] >= sma_20 - 10:
+                    if result['ce_beta'] > abs(result['pe_beta']):
+                        self.buy_pe_premium(kite_login, live_data, instrument_token)
         
     def get_fund(self, kite_login):
         try:  

@@ -12,7 +12,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
 	format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 setting = Setting()
-setting.set_request_token("HD1EWLDRijBY51E2jiY2QIGLsu22BjdI")
+setting.set_request_token("LfPSqhJy9iVLoR9UZEloSKXf4zya9v0f")
 
 tokens = setting.securities.keys()
 

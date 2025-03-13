@@ -102,6 +102,25 @@ processed_details = """
     ON processed_details (parent_token, date);
 """
 
+tick_details = """
+    CREATE TABLE IF NOT EXISTS tick_details (
+        id SERIAL PRIMARY KEY,
+        token BIGINT NOT NULL,
+        unique_key BIGINT NOT NULL,
+        date TIMESTAMP NOT NULL,
+        last_price DECIMAL(10, 2) NOT NULL,
+        oi DECIMAL(10, 2) NOT NULL,
+        volume_traded BIGINT NOT NULL,
+        quantity DECIMAL(10, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (token, date)
+    );
+    
+    -- Add an index on (token, date) for faster date-based queries
+    CREATE INDEX tick_details_token_date 
+    ON tick_details (token, date);
+"""
+
 setting = Setting()
 
 
@@ -111,7 +130,9 @@ s = db.connect(auto = True)
 print(s)
     
 # db.create_database("sharemarkets")
-db.create_tables(processed_details)
+db.create_tables(tick_details)
 
 db.close()
 
+# select unique_key, date, ce_token, ce_beta, ce_oi, ce_quantity, created_at from processed_details order by created_at;
+# select unique_key,date,pe_token,pe_beta,pe_oi,pe_quantity,created_at from processed_details order by created_at;

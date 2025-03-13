@@ -1,5 +1,14 @@
-To go to virtual python
+To go to virtual python type
 source vPython/bin/activate
 
-To start Jupyter
+And start Jupyter by
 jupyter lab
+
+To access jupyter console type in browser
+http://localhost:8888/
+
+
+to access postgres
+psql -U postgres
+\c <database>
+\dt for showing tables

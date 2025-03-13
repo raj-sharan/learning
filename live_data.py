@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 from momentum_analyser import MomentumAnalyser
 
 class LiveData:
-    def __init__(self, logging):  # Fixed constructor
+    def __init__(self, setting, logging):  # Fixed constructor
         self.logging = logging
         self.instruments_data = {}  # Initialized as an empty dictionary
         self.order_updated = False
         self.ticks_data = []
-        self.analyser = MomentumAnalyser()
+        self.analyser = MomentumAnalyser(setting, logging)
 
     def load_ticks(self, ticks):
         self.ticks_data.extend(ticks)
