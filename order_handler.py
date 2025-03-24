@@ -14,7 +14,7 @@ class OrderHandler:
         self.position_loaded_at = None
         
     def load_positions(self, instruments): 
-        if self.position_loaded_at is not None and datetime.now() - self.position_loaded_at <= timedelta(seconds = 10):
+        if self.position_loaded_at is not None and datetime.now() - self.position_loaded_at <= timedelta(seconds = 30):
             return True
         
         orders = self.kite_login.conn.positions()
@@ -49,7 +49,10 @@ class OrderHandler:
 
         return any_position
 
-    def reload_positions(self, instruments):
+    def reload_positions(self, instruments, skip = False):
+        if skip:
+            return False
+            
         try: 
             return self.load_positions(instruments)
         except Exception as e:
@@ -75,22 +78,27 @@ class OrderHandler:
 
 
     def manage_orders(self, instruments, live_data):
-        self.active_tokens.clear()
 
         for parent_token, instrument in instruments.items():
             for token, order in instrument.orders.items():
                 current_data = live_data.get_current_data(token)
                 price = current_data['price'] if current_data is not None else 0
-   
-                self.logging.info(f'Order ({token}), Target: {order.target}, SL: {order.sl_price}, Last Price: {price}')
-                self.active_tokens.append(token)
+                sl_price = round(order.sl_price, 2) if order.sl_price else 0.0
+                
+                self.logging.info(f'Order ({order.symbol}), SL: {sl_price}, Last Price: {price}')
+
+                if order.scalping is None:
+                    self.set_order_scalping_mode(order, instrument)
+                    
                 if order.should_cancel_position(live_data):  
                     order.cancel_position(self.kite_login)
                 elif order.should_place_sl_order(live_data):
                     order.place_stop_loss_order(self.kite_login)
                 elif order.invalid_sl_order(live_data):
                     order.cancel_sl_order(self.kite_login)
-                elif order.should_trail_order():
+                elif order.is_trend_discontinues(self.kite_login, instrument, live_data):
+                    order.cancel_sl_order(self.kite_login)
+                elif order.should_trail_order(self.kite_login):
                     order.trail_stop_loss_order(self.kite_login)
                 # elif order.should_modify_sl_order(live_data):
                 #     order.update_stop_loss_order(self.kite_login, live_data)
@@ -98,10 +106,6 @@ class OrderHandler:
 
                 if self.out_of_trading_session():
                     order.cancel_sl_order(self.kite_login)
-                    if order.sl_order_id is None:
-                        order.cancel_position(self.kite_login)
-
-        live_data.update_tracking_high_price(self.active_tokens)
 
     def cancel_invalid_sl_orders(self, live_data, instruments):
         if live_data.order_updated:
@@ -129,8 +133,15 @@ class OrderHandler:
         current_time = datetime.now()
         # current_time = datetime(current_time.year, 2, 28, 14, 15)
         from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 15)
-        to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 5)
+        to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 15)
         return current_time > to_dt
+
+    def set_order_scalping_mode(self, order, instrument):
+        if instrument.current_data_analysis:
+            oi_ratio = instrument.current_data_analysis['ce_pe_oi_ratio']
+            if oi_ratio > 0.7 and oi_ratio < 2.5:
+                order.scalping = True
+                
                     
             
         

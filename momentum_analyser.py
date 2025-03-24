@@ -1,22 +1,26 @@
 from datetime import datetime, timedelta
 import pandas as pd
+import traceback
 
 from common import Util
 from db_connect import PostgresDB
 
 class MomentumAnalyser:
     def __init__(self, setting, logging):
+        self.ticks_data = []
         self.current_data_df = pd.DataFrame(columns=['token', 'unique_key', 'date', 'last_price', 'oi', 'quantity'])
-        self.db_conn = PostgresDB(setting)
+        self.db_conn = PostgresDB(setting, logging)
         self.logging = logging
 
-    def load_current_data(self, live_data):
-        ticks_data = live_data.ticks_data.copy()
+    def load_ticks(self, ticks):
+        self.ticks_data.extend(ticks)
         
+    def load_current_data(self, should_save = True):
+        ticks_data = self.ticks_data.copy()
+
         for tick in ticks_data:
             if 'exchange_timestamp' not in tick:
                 self.logging.error("exchange_timestamp missing")
-                print(tick)
                 continue
                 
             timestamp = tick['exchange_timestamp']
@@ -28,7 +32,7 @@ class MomentumAnalyser:
             oi = tick['oi'] if 'oi' in tick else 0
             volume_traded = tick['volume_traded'] if 'volume_traded' in tick else 0
             
-            last_traded_quantity = self.calculate_last_traded_quantity(tick)
+            bid_volume, offer_volume = self.fetch_bid_offer_volume(tick)
             time = datetime(timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute, timestamp.second)
             # Create DataFrame with a single row
             df = pd.DataFrame([{
@@ -38,19 +42,17 @@ class MomentumAnalyser:
                 'last_price': last_price,
                 'oi': oi,
                 'volume_traded': volume_traded,
-                'quantity': last_traded_quantity
+                'bid_volume': bid_volume,
+                'offer_volume': offer_volume
             }])
 
-            self.save_data_to_db(df)
+            if should_save:
+                self.save_data_to_db(df)
 
             # self.current_data_df = pd.concat([self.current_data_df, df], ignore_index=True)
             
-        del live_data.ticks_data[0:len(ticks_data)]
+        del self.ticks_data[0:len(ticks_data)]
         ticks_data.clear()
-        
-        # time = datetime.now() - timedelta(minutes = 10)
-        # unique_key = Util.generate_5m_id(time)
-        # self.current_data_df.drop(self.current_data_df[self.current_data_df['unique_key'] < unique_key].index, inplace=True)
 
         
     def analyse_momentum(self, date, parent_token, ce_token, pe_token, unique_key = None):
@@ -62,7 +64,6 @@ class MomentumAnalyser:
         
         if current_data_df is None or current_data_df.empty:  # Corrected
             return result
-
 
         if len(current_data_df) < 200:
             return result
@@ -85,7 +86,9 @@ class MomentumAnalyser:
             
         # Calculate metrics
         result["beta"] = self.calculate_beta(merged_df)
-        result["corr"] = self.calculate_correlation(merged_df)
+        result["oi_data"] = self.calculate_oi_change(ce_token, pe_token, date)
+        result["ce_volume"] = premium_ce_df['volume_traded'].iloc[-1]
+        result["pe_volume"] = premium_pe_df['volume_traded'].iloc[-1]
     
         return result
 
@@ -102,14 +105,45 @@ class MomentumAnalyser:
 
         return {"ce_beta": ce_beta, "pe_beta": pe_beta}
 
-    def calculate_correlation(self, merged_df):
-        # Select relevant columns for correlation
-        correlation_matrix = merged_df[
-            ["last_price", "oi_ce", "quantity_ce", "oi_pe", "quantity_pe"]
-        ].corr()
+    def calculate_oi_change(self, ce_token, pe_token, date):
+        result = {"ce_oi_change": 0.0, "pe_oi_change": 0.0, 'ce_oi': 0.0, 'pe_oi': 0.0}
+        
+        # Fetch CE and PE OI data for the given date
+        oi_ce_df = self.fetch_oi_records(ce_token, date)
+        oi_pe_df = self.fetch_oi_records(pe_token, date)
+        
+        # Return defaults if data is missing
+        if oi_ce_df is None or oi_pe_df is None or oi_ce_df.empty or oi_pe_df.empty:
+            return result
+    
+        try:
+            # print(oi_ce_df["oi"])
+            # if len(oi_ce_df["oi"]) >= 2:
+            #     print([oi_ce_df["oi"].iloc[-1], oi_ce_df["oi"].iloc[-2], oi_ce_df["oi"].iloc[-1] - oi_ce_df["oi"].iloc[-2]])
+            # print('-------------------------')
+            # print(oi_pe_df["oi"])
+            # if len(oi_pe_df["oi"]) >= 2:
+            #     print([oi_pe_df["oi"].iloc[-1], oi_pe_df["oi"].iloc[-2], oi_pe_df["oi"].iloc[-1] - oi_pe_df["oi"].iloc[-2]])
+            # Calculate the change in OI (last value - previous value)
+            result["ce_oi"] = oi_ce_df["oi"].iloc[-1]
+            result["pe_oi"] = oi_pe_df["oi"].iloc[-1]
+            if len(oi_ce_df["oi"]) >= 2:
+                result["ce_oi_change"] = oi_ce_df["oi"].diff().iloc[-1]
+            if len(oi_pe_df["oi"]) >= 2:
+                result["pe_oi_change"] = oi_pe_df["oi"].diff().iloc[-1]
+    
+        except Exception as e:
+            self.logging.error(f"Error calculating OI change: {e}")
+    
+        return result
 
-        return correlation_matrix
-
+    def fetch_bid_offer_volume(self, tick):
+        if 'depth' in tick:
+            bid_volume = sum([level['quantity'] for level in tick['depth']['buy']])
+            offer_volume = sum([level['quantity'] for level in tick['depth']['sell']])
+            return bid_volume, offer_volume
+        return 0, 0
+  
     def calculate_last_traded_quantity(self, tick):
         last_traded_quantity = 0
         if 'depth' not in tick:
@@ -122,7 +156,7 @@ class MomentumAnalyser:
         if price >= lowest_ask:  # If price reaches the lowest ask, it's a buy
             last_traded_quantity = tick['last_traded_quantity']
         elif price <= highest_bid:  # If price drops to the highest bid, it's a sell
-            last_traded_quantity = tick['last_traded_quantity']
+            last_traded_quantity = - tick['last_traded_quantity']
 
         return last_traded_quantity
 
@@ -140,7 +174,7 @@ class MomentumAnalyser:
         saved = False
         table_name = 'tick_details'
         try:
-            query = """INSERT INTO %s(token, unique_key, date, last_price, oi, volume_traded, quantity) VALUES %%s""" % (table_name)
+            query = """INSERT INTO %s(token, unique_key, date, last_price, oi, volume_traded, bid_volume, offer_volume) VALUES %%s""" % (table_name)
     
             # Ensure the database connection is established
             self.db_conn.connect()
@@ -149,9 +183,8 @@ class MomentumAnalyser:
             tuples = [tuple(x) for x in df.to_numpy()]
     
             # Insert data using a bulk insert method
-            if not self.db_conn.insert_bulk_data(query, tuples):
-                print(df)
-    
+            self.db_conn.insert_bulk_data(query, tuples)
+            
             # Commit transaction
             self.db_conn.commit()
             saved = True
@@ -168,9 +201,9 @@ class MomentumAnalyser:
             # Ensure ce_token and pe_token are lists and format them correctly
             token_list = [str(parent_token)] + [str(ce_token)] + [str(pe_token)]
             token_str = ",".join(token_list)  # Convert to comma-separated string
-            
+
             sql = f"""
-                SELECT token, unique_key, date, last_price, oi, quantity 
+                SELECT token, unique_key, date, last_price, oi, volume_traded, bid_volume, offer_volume  
                 FROM tick_details 
                 WHERE unique_key = {unique_key} AND token IN ({token_str})
                 ORDER BY created_at
@@ -187,7 +220,81 @@ class MomentumAnalyser:
             if self.db_conn is not None:
                 self.db_conn.close()  # Ensure connection is properly closed
 
+    def fetch_oi_records(self, token, timestamp):
+        try:
+            time = datetime(timestamp.year, timestamp.month, timestamp.day, 9, 15, 0)
+            from_unique_key = Util.generate_5m_id(time)
+            to_unique_key = Util.generate_5m_id(timestamp)
+            
+            sql = f"""
+                SELECT oi  
+                FROM tick_details  
+                WHERE unique_key >= {from_unique_key} AND unique_key <= {to_unique_key} AND token = {token}
+                GROUP BY oi  
+                ORDER BY MIN(created_at) ASC;
+            """
+            self.db_conn.connect()
+            
+            return self.db_conn.get_records_in_data_frame(sql)  # Use self.db_conn instead of db
+    
+        except Exception as e:
+            self.logging.error(f"Error fetching records for momentum calculation: {e}")
+            return None  # Ensure None is returned on failure
+    
+        finally:
+            if self.db_conn is not None:
+                self.db_conn.close()  # Ensure connection is properly closed
 
+    def fetch_ticks_data(self, from_dt, to_dt):
+        try:
+            sql = f"""
+                SELECT token, date, last_price, oi, volume_traded, bid_volume, offer_volume  
+                FROM tick_details 
+                WHERE date >= '{from_dt}' AND date < '{to_dt}'
+                ORDER BY created_at
+            """
+            
+            self.db_conn.connect()
+            ticks_data = self.db_conn.fetch_records(sql)  # Use self.db_conn instead of db
+            ticks = []
+
+            if len(ticks_data) > 0:     
+                for row in ticks_data:
+                    depth = {}
+                    
+                    # Only process rows with non-zero quantity
+                    if row[5] != 0:
+                        bid = abs(row[5]) if row[5] > 0 else 0
+                        ask = abs(row[5]) if row[5] < 0 else 0
+                        depth = {'buy': {'quantity': bid, 'price': 0}, 'sell': {'quantity': ask, 'price': 0}}
+                
+                    # Create the tick dictionary
+                    tick = {
+                        'instrument_token': row[0],
+                        'exchange_timestamp': row[1],
+                        'last_price': row[2],
+                        'oi': row[3],
+                        'volume_traded': row[4]
+                    }
+                
+                    # Add depth data if present
+                    if depth:
+                        tick.update(depth)  # ✅ Use update to merge dictionaries
+                
+                    ticks.append(tick)  # ✅ Correct way to add items to a list
+            
+            return ticks
+
+            
+        except Exception as e:
+            self.logging.error(f"Error fetching ticks_data: {e}")
+            print(traceback.format_exc())
+            return []  # Ensure None is returned on failure
+        
+        finally:
+            if self.db_conn is not None:
+                self.db_conn.close()  # Ensure connection is properly closed
+        
      
 
     

@@ -5,8 +5,17 @@ def moving_average_high_9sma(df):
 def moving_average_low_9sma(df):
     return df['low'].rolling(window=9).mean().round(2)
 
+def moving_average_close_9sma(df):
+    return df['close'].rolling(window=9).mean().round(2)
+    
+def moving_average_close_15sma(df):
+    return df['close'].rolling(window=15).mean().round(2)
+    
 def moving_average_close_20sma(df):
     return df['close'].rolling(window=20).mean().round(2)
+
+def moving_average_close_50sma(df):
+    return df['close'].rolling(window=50).mean().round(2)
 
 def moving_average_close_200sma(df):
     return df['close'].rolling(window=200).mean().round(2)

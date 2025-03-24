@@ -3,16 +3,17 @@ from datetime import datetime, timedelta
 
 class InstrumentToken:  # Fixed typo from "IntrumentToken"
 
-    def __init__(self, setting):
+    def __init__(self, setting, logging):
         self.instrument_tokens = None
         self.setting = setting
+        self.logging = logging
 
     def load_instrument_tokens(self, kite_login):
         if self.instrument_tokens is None:
             try:
                 self.instrument_tokens = kite_login.conn.instruments(exchange='NFO')
             except Exception as e:
-                print(f"Failed to load instrument_tokens: {e}")  # Use print instead of self.logging
+                self.logging.error(f"Failed to load instrument_tokens: {e}")  # Use print instead of self.logging
   
     def strike_price_tokens(self, token, current_data):  # Added `self`
         if self.instrument_tokens is None or current_data is None or current_data['price'] is None:

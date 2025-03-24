@@ -8,35 +8,36 @@ class LiveData:
         self.logging = logging
         self.instruments_data = {}  # Initialized as an empty dictionary
         self.order_updated = False
-        self.ticks_data = []
         self.analyser = MomentumAnalyser(setting, logging)
-
-    def load_ticks(self, ticks):
-        self.ticks_data.extend(ticks)
     
     def collect_instruments_data(self, ticks):
-        self.load_ticks(ticks)
+        self.analyser.load_ticks(ticks)
         
         for tick in ticks:
             token = tick["instrument_token"]
             price = tick["last_price"]
-
+            volume_traded = tick['volume_traded'] if 'volume_traded' in tick else 0
+            bid_volume, offer_volume = self.analyser.fetch_bid_offer_volume(tick)
+            oi = tick['oi'] if 'oi' in tick else 0
+            
             if token not in self.instruments_data:
-                self.instruments_data[token] = {'price': price, 'time': datetime.now(), 'track': False, 'high': 0}
-            else:
-                self.instruments_data[token]['price'] = price
-                self.instruments_data[token]['time'] = datetime.now()  # Update time on new data
-                if self.instruments_data[token]['track']:
-                    if price > self.instruments_data[token]['high']:
-                        self.instruments_data[token]['high'] = price
+                self.instruments_data[token] = {}
+            
+            self.instruments_data[token]['price'] = price
+            self.instruments_data[token]['time'] = datetime.now()  # Update time on new data
+            self.instruments_data[token]['volume_traded'] = volume_traded
+            self.instruments_data[token]['oi'] = oi
+            self.instruments_data[token]['bid_volume'] = bid_volume
+            self.instruments_data[token]['offer_volume'] = offer_volume
 
     def to_s(self):
-        df = pd.DataFrame.from_dict(self.instruments_data, orient="index")
+        flag = 1
+        # df = pd.DataFrame.from_dict(self.instruments_data, orient="index")
         # df.reset_index(drop=True, inplace=True)
-        if len(df) > 0:
-            print('---------------------------------------------------------')
-            print(df)
-            print('---------------------------------------------------------')
+        # if len(df) > 0:
+        #     print('---------------------------------------------------------')
+        #     print(df)
+        #     print('---------------------------------------------------------')
         
     def get_current_data(self, token):  # Added `self`
         if self.instruments_data is not None and token in self.instruments_data:
@@ -44,15 +45,6 @@ class LiveData:
                 return self.instruments_data[token]
         return None
 
-    def update_tracking_high_price(self, active_tokens):
-        for token, values in self.instruments_data.items():
-            if token in active_tokens:
-                if values["track"] == False:
-                    values["high"] = 0
-                    values["track"] = True   
-            else:
-                values["track"] = False
-                values["high"] = 0
         
     # def get_current_pattern(token, time_id):
     #     data_5m["is_shooting_star"]     = data_5m.apply(lambda row: is_shooting_star(row.name, data_5m), axis=1)

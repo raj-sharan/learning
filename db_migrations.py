@@ -1,7 +1,12 @@
 #!/Users/grajwade/vPython/bin/python
+import logging
+import sys
 
 from settings import Setting
 from db_connect import PostgresDB
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
+	format="%(asctime)s[%(levelname)s] - %(message)s")
 
 historical_test_data_5m_sql = """
     CREATE TABLE IF NOT EXISTS historical_data_5m_test (
@@ -89,6 +94,10 @@ processed_details = """
         pe_beta DECIMAL(10, 2) NOT NULL,
         pe_oi DECIMAL(10, 2) NOT NULL,
         pe_quantity DECIMAL(10, 2) NOT NULL,
+        curr_oi DECIMAL(10, 2) NOT NULL,
+        curr_volume DECIMAL(10, 2) NOT NULL,
+        volume DECIMAL(10, 2) NOT NULL, 
+        curr_quantities DECIMAL(10, 2) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (parent_token, unique_key)
     );
@@ -111,7 +120,8 @@ tick_details = """
         last_price DECIMAL(10, 2) NOT NULL,
         oi DECIMAL(10, 2) NOT NULL,
         volume_traded BIGINT NOT NULL,
-        quantity DECIMAL(10, 2) NOT NULL,
+        bid_volume BIGINT NOT NULL,
+        offer_volume BIGINT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (token, date)
     );
@@ -125,7 +135,7 @@ setting = Setting()
 
 
 
-db = PostgresDB(setting)
+db = PostgresDB(setting, logging)
 s = db.connect(auto = True)
 print(s)
     
@@ -136,3 +146,4 @@ db.close()
 
 # select unique_key, date, ce_token, ce_beta, ce_oi, ce_quantity, created_at from processed_details order by created_at;
 # select unique_key,date,pe_token,pe_beta,pe_oi,pe_quantity,created_at from processed_details order by created_at;
+#select min(date) as date1, oi from tick_details where token=13158146 group by token, oi order by date1;

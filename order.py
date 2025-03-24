@@ -1,6 +1,9 @@
+import re
+
 from datetime import datetime, timedelta
 from common import Util
 import pandas as pd
+import traceback
 
 
 class MarketOrder:
@@ -18,7 +21,9 @@ class MarketOrder:
         self.logging = logging
         self.trail_at = None
         self.close_position = None
-        
+        self.current_candle = {}
+        self.trailed = False
+        self.scalping = False
 
     def exceed_time(self):
         if self.order_placed_at is None:
@@ -35,7 +40,7 @@ class MarketOrder:
     def update(self, order_details):           
         self.quantity = order_details.get("quantity", self.quantity)  # Use .get() to avoid KeyErrors
  
-    def buy_order(self, kite_login, stop_loss, target, candle):
+    def buy_order(self, kite_login, stop_loss, target, candle, scalping):
         order_id = self.place_market_order(kite_login)  # Pass quantity
         if order_id is not None:
             self.target = target
@@ -43,6 +48,7 @@ class MarketOrder:
             self.candle = candle
             self.order_id = order_id
             date = candle['date']
+            self.scalping = scalping
             if isinstance(date, str):
                 date = datetime.fromisoformat(date)
 
@@ -148,7 +154,7 @@ class MarketOrder:
                     price=max(new_stop_loss_price - 1, 0)  # Ensure valid price
                 )
     
-                self.sl_price = new_stop_loss_price - 1
+                self.sl_price = new_stop_loss_price - 1.0
                 self.logging.info(f"Stop-Loss order updated successfully for {self.symbol}. New SL: {new_stop_loss_price}")
     
                 return True
@@ -157,7 +163,7 @@ class MarketOrder:
     
         return False
 
-    def cancel_sl_order(self, kite_login):
+    def cancel_sl_order(self, kite_login, should_close_position = True):
         if self.sl_order_id is not None:
             try:
                 kite_login.conn.cancel_order(variety=kite_login.conn.VARIETY_REGULAR, order_id=self.sl_order_id)
@@ -166,20 +172,19 @@ class MarketOrder:
                 self.sl_price = None
             except Exception as e:
                 self.logging.error(f"Error canceling SL order {self.sl_order_id}: {e}")
+                
+        if self.sl_order_id is None and should_close_position:
+            self.close_position = True
   
     def reload_order(self, kite_login, orders, instrument):
-        reload_order_time = False
-        if self.order_placed_at is None:
-            reload_order_time = True
-            
         for order in orders:
             if order['instrument_token'] == self.token:
-                if reload_order_time and order['transaction_type'] == 'BUY' and order['status'] == 'COMPLETE':
+                if order['transaction_type'] == 'BUY' and order['status'] == 'COMPLETE':
                     self.order_id = order['order_id']
                     self.order_placed_at = order['exchange_timestamp']
                     self.buy_price = order['average_price']
                 elif order['order_type'] == 'SL' and order['status'] == 'TRIGGER PENDING':
-                    self.sl_price = order['price']
+                    self.sl_price = order['price'] * 1.0
                     self.sl_order_id = order['order_id']
     
         if self.order_placed_at is not None and self.candle is None:
@@ -193,27 +198,19 @@ class MarketOrder:
             from_dt = to_dt - timedelta(minutes=15)
     
             try:
-                if self.candle is None:
-                    historical_data = kite_login.conn.historical_data(self.token, from_dt, to_dt, "5minute")
-                    if historical_data:
-                        self.candle = historical_data[-1]
-    
+                historical_data = kite_login.conn.historical_data(self.token, from_dt, to_dt, "5minute")
+                if historical_data:
+                    self.candle = historical_data[-1]
+                    
                 if self.candle:
                     if self.sl_price is None:
-                        self.sl_price = self.candle['low'] - 5
+                        self.sl_price = self.candle['low'] * 1.0 - 5.0
                     date = self.candle['date']
                     if isinstance(date, str):
                         date = datetime.fromisoformat(date)
         
                     self.trail_at = datetime(date.year, date.month, date.day, date.hour, date.minute)
-    
-                    # if self.target is None and instrument.historical_data_5m is not None:
-                    #     parent_candle = instrument.get_5m_candle_at(placed_time)
-                    #     if parent_candle:
-                            # self.target = round(self.candle['high'] +  2 * parent_candle['ATR'], 2)
-                            # self.target = round(self.candle['low'] +  parent_candle['ATR'], 2)
                             
-                    
             except Exception as e:
                 self.logging.error("Failed to get candle: {}".format(e))
                 return None
@@ -221,60 +218,29 @@ class MarketOrder:
         return True
 
     def trail_stop_loss_order(self, kite_login):
-        try:
-            # Fetch order data
-            order_data = self.get_order_data(kite_login)
-            print(order_data)
-    
-            if order_data is not None and len(order_data) >= 2:
-                # Ensure 'date' is properly parsed
-                date = order_data.iloc[-1]['date']
-                if isinstance(date, str):
-                    date = datetime.fromisoformat(date)
-    
-                # Store trail timestamp
-                self.trail_at = datetime(date.year, date.month, date.day, date.hour, date.minute)
-    
-                # Extract candle data
-                last_candle = order_data.iloc[-1]
-                last_low = last_candle['low']
-                last_close = last_candle['close']
-    
-                pre_last_candle = order_data.iloc[-2]
-                pre_low = pre_last_candle['low']
-    
-                # Cancel SL if previous low is greater than last close
-                if pre_low > last_close and self.exceed_time() and self.sl_order_id is not None:
-                    self.cancel_sl_order(kite_login)
-                    if self.sl_order_id is None:
-                        self.close_position = True
-                elif pre_low > last_close and self.sl_order_id is None:
-                    self.close_position = True
-                # Trail SL if conditions match
-                elif pre_low > self.sl_price + 5 and last_low > pre_low:
-                    try:
-                        kite_login.conn.modify_order(
-                            variety=kite_login.conn.VARIETY_REGULAR,
-                            order_id=self.sl_order_id,
-                            trigger_price=pre_low,
-                            price=max(pre_low - 1, 0)
-                        )
-    
-                        # Update SL price
-                        self.sl_price = pre_low - 1
-                        self.logging.info(f"Stop-Loss order trailed successfully for {self.symbol}. New SL: {pre_low}")
-    
-                        return True
-    
-                    except Exception as e:
-                        self.logging.error(f"Error trailing stop-loss order for {self.symbol}: {e}")
+        try:   
+            date = datetime.now()
+            self.trail_at = datetime(date.year, date.month, date.day, date.hour, date.minute)
+            new_sl = self.candle['high'] - 3
+            kite_login.conn.modify_order(
+                variety = kite_login.conn.VARIETY_REGULAR,
+                order_id = self.sl_order_id,
+                trigger_price = new_sl,
+                price=max(new_sl - 1, 0)
+            )
+            
+            # Update SL price
+            self.sl_price = new_sl - 1
+            self.logging.info(f"Stop-Loss order trailed successfully for {self.symbol}. New SL: {new_sl}")
+            self.trailed = True
+            
+            return True
     
         except Exception as e:
             self.logging.error(f"Error in trail_stop_loss_order: {e}")
     
         return False
             
-        
     def is_target_achieved(self, live_data):
         curr_data = live_data.get_current_data(self.token)
         if curr_data is None or self.target is None:
@@ -284,7 +250,55 @@ class MarketOrder:
     
         return max_price > self.target
 
-        
+    def is_trend_discontinues(self, kite_login, instrument, live_data):
+        if not (self.sl_order_id and instrument.momentum_result and instrument.refresh_till_5m):
+            return False
+
+        if self.scalping and self.exceed_time():
+            return True
+            
+        if not (self.order_placed_at and instrument.current_data_analysis and instrument.current_data_analysis.get('unique_key')):
+            return False
+
+        try:
+            ce_beta = instrument.momentum_result['ce_beta']
+            pe_beta = instrument.momentum_result['pe_beta']
+            ce_curr_oi_change = instrument.current_data_analysis['ce_curr_oi_change']
+            pe_curr_oi_change = instrument.current_data_analysis['pe_curr_oi_change']
+    
+            if datetime.now() <= self.order_placed_at + timedelta(minutes=15):
+                return False
+    
+            current_time = datetime.now()
+            if not (current_time > instrument.refresh_till_5m and current_time - instrument.refresh_till_5m < timedelta(minutes=5)):
+                return False
+    
+            if len(instrument.historical_data_5m) < 2:
+                return False
+    
+            candle_5m = instrument.historical_data_5m.iloc[-1]
+            pre_candle_5m = instrument.historical_data_5m.iloc[-2]
+    
+            check_unique_key = (
+                candle_5m['unique_key'] == instrument.momentum_result['unique_key']
+                and candle_5m['unique_key'] == instrument.current_data_analysis['unique_key']
+            )
+            if not check_unique_key:
+                return False
+    
+            close, pre_low, pre_high = candle_5m['close'], pre_candle_5m['low'], pre_candle_5m['high']
+    
+            if self.is_ce():
+                return pre_low - 1 > close and (abs(ce_beta) > abs(pe_beta) + 1)
+            else:
+                return close > pre_high + 1 and (abs(pe_beta) > abs(ce_beta) + 1)
+    
+        except Exception as e:
+            self.logging.error(f"Error in is_trend_discontinues: {e}")
+            return False
+       
+                        
+ 
     def should_cancel_position(self, live_data):
         if self.quantity is not None and self.quantity <= 0:
             return True
@@ -332,27 +346,33 @@ class MarketOrder:
 
 
     def invalid_sl_order(self, live_data):
-        if self.sl_price is not None:
+        if self.sl_price is not None and self.sl_order_id is not None:
             curr_data = live_data.get_current_data(self.token)
             if curr_data is None:
                 return False
     
             last_price = curr_data['price']
     
-            if last_price <= self.sl_price:
+            if last_price < self.sl_price:
                 return True
     
         return False
 
-    def should_trail_order(self):
+    def should_trail_order(self, kite_login):
+        if self.trailed:
+            return False
+            
         if self.sl_order_id is not None and self.sl_price is not None:
-            if self.order_placed_at is not None and datetime.now() > self.order_placed_at + timedelta(minutes = 15):
+            if self.order_placed_at is not None and self.exceed_time():
                 if self.trail_at is None or datetime.now() > self.trail_at + timedelta(minutes = 5):
-                    return True
+                    order_data = self.get_token_data(kite_login)
+                    if order_data is not None and len(order_data) >= 2:
+                        if order_data.iloc[-1]['low'] > self.candle['high'] + 5 and self.candle['high'] - self.sl_price > 5:
+                            return True
         
         return False
 
-    def get_order_data(self, kite_login):
+    def get_token_data(self, kite_login):
         try:
             current_time = datetime.now()
             # current_time = datetime(current_time.year, 2, 28, 14, 15)
@@ -363,16 +383,26 @@ class MarketOrder:
             
             to_dt = from_dt + timedelta(minutes = candle_count * 5)
             from_dt = to_dt - timedelta(minutes = 15)
+
+            unique_key = Util.generate_5m_id(current_time - timedelta(minutes = 5))
+            
+            if unique_key in self.current_candle:
+                return self.current_candle[unique_key]
             
             data = kite_login.conn.historical_data(self.token, from_dt, to_dt, "5minute")
             data_df = pd.DataFrame(data)
 
+            self.current_candle[unique_key] = data_df
+            
             return data_df
                
         except Exception as e:
             self.logging.error(f"Error in refreshing 5m data for {self.token}: {e}")
+            self.logging.error(traceback.format_exc())
             return None
 
+    def is_ce(self):
+        return re.search(r"CE$", self.symbol) is not None
         
     # def load_gtt(self, kite_login, live_data, gtt_orders):
     #     # Filter gtt_orders to get the one matching self.token

@@ -24,3 +24,8 @@ if [ "$input" = "tp" ]; then
     chmod +x trading_poc.py
     ./trading_poc.py
 fi
+
+if [ "$input" = "tl" ]; then
+    chmod +x test_live_trading.py
+    ./test_live_trading.py
+fi

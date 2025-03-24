@@ -219,9 +219,7 @@ def is_bearish_marubozu(index, data):
 
 
 def valid_bulish_patterns(index, df):
-    return is_hammer(index, df) or is_bullish_engulfing(index, df)
-        # or is_bullish_marubozu(index, df)
+    return is_hammer(index, df) or is_bullish_engulfing(index, df) or is_bullish_marubozu(index, df)
 
 def valid_bearish_patterns(index, df):
-    return is_shooting_star(index, df) or is_bearish_engulfing(index, df)
-        # or is_bearish_marubozu(index, df)
+    return is_shooting_star(index, df) or is_bearish_engulfing(index, df) or is_bearish_marubozu(index, df)

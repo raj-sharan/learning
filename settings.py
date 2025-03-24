@@ -18,6 +18,7 @@ class Setting:
             self.api_secret     = self.settings.get("api_secret")
             self.kite_id        = self.settings.get("kite_id")
             self.securities     = self.settings.get("securities")
+            self.manage_position = self.settings.get("manage_position")
             self.db_name        = self.settings.get("db_name")
             self.db_username    = self.settings.get("db_username")
             self.db_password    = self.settings.get("db_password")

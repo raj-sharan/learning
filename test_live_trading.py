@@ -18,14 +18,14 @@ from instrument import Instrument
 from instruments_token import InstrumentToken
 from order_handler import OrderHandler
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
 	format="%(asctime)s[%(levelname)s] - %(message)s")
 
 warnings.filterwarnings("ignore")
 
 # Initialize
 setting = Setting()
-setting.set_request_token("rC81Z2zpaA14ew71mY4dm8e3BrqSFCux")
+setting.set_request_token("9xIFsARsq3Iln2jzxhbfDrRA9Y2xHDRG")
 
 kite_login = KiteLogin(setting, logging)
 kite_login.connect()
@@ -85,7 +85,7 @@ kws.on_reconnect = on_reconnect
 
 # Infinite loop on the main thread. Nothing after this will run.
 # You have to use the pre-defined callbacks to manage subscriptions.
-kws.connect(threaded=True)
+# kws.connect(threaded=True)
 
             
 tokens = setting.get_securities_tokens()
@@ -136,22 +136,30 @@ def subscribe_strike_price_tokens(token):
         if (token := instrument_token.get_token_by_symbol(item)) is not None
     ]
     
-    subscribe_tokens = list(set(ce_tokens + pe_tokens + subscribe_tokens))
+    subscribe_tokens = ce_tokens + pe_tokens
+        
 
     if subscribe_tokens:
         logging.info(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
-        kws.subscribe(subscribe_tokens)
-        kws.set_mode(kws.MODE_FULL, subscribe_tokens)
+        # kws.subscribe(subscribe_tokens)
+        # kws.set_mode(kws.MODE_FULL, subscribe_tokens)
     return subscribe_tokens
-       
 
+def on_ticks_load(from_time, to_time):
+    from_dt = datetime(from_time.year, from_time.month, from_time.day, from_time.hour, from_time.minute, from_time.second)
+    to_dt = datetime(to_time.year, to_time.month, to_time.day, to_time.hour, to_time.minute, to_time.second)
+    ticks = live_data.analyser.fetch_ticks_data(from_dt, to_dt)
+
+    if len(ticks) > 0:
+        live_data.collect_instruments_data(ticks)
+    
 def trading_windows(current_time):
     from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 0)
     to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
-start_time = datetime.now()
-start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 10)
+start_time = datetime.now() - timedelta(days = 1)
+start_time = datetime(start_time.year, start_time.month, start_time.day, 13, 25)
 unique_key = Util.generate_5m_id(start_time)
 # Reload data for all tokens
 for token in tokens:
@@ -168,61 +176,59 @@ except Exception as e:
 
 # Main loop
 subscribed_list = []
-
+live_data_loaded_at = start_time
+current_time = start_time 
 while True:
-    current_time = datetime.now()
+    current_time = current_time + timedelta(minutes = 1)
     if not trading_windows(current_time):
         logging.info("Main thread: Trading session ended")
         exit()
         
     subscribed_list.clear()
 
-    print("============================================ * In Trading session * =================================================")
+    print(f"{current_time}===================================== * In Test Trading session * =================================================")
     
     live_data.to_s()
 
-    if kws.is_connected():
-        try:
-            tokens = setting.reload().get_securities_tokens()
+    try:
+        tokens = setting.reload().get_securities_tokens()
 
-            kws.subscribe(tokens)
-            kws.set_mode(kws.MODE_FULL, tokens)
-            subscribed_list.extend(tokens)
+        subscribed_list.extend(tokens)
+        
+        for token in tokens:
+            reload_data(token, unique_key)
             
-            for token in tokens:
-                reload_data(token, unique_key)
-                
-                subscribed_strike_price_tokens = subscribe_strike_price_tokens(token)
-                if subscribed_strike_price_tokens:
-                    subscribed_list.extend(subscribed_strike_price_tokens)
+            subscribed_strike_price_tokens = subscribe_strike_price_tokens(token)
+            if subscribed_strike_price_tokens:
+                subscribed_list.extend(subscribed_strike_price_tokens)
 
-            positions_reloaded = order_handler.reload_positions(instruments)
-            live_data.analyser.load_current_data()
-            if positions_reloaded is not None:
-                if positions_reloaded and setting.manage_position:
-                    if order_handler.fill_orders(instruments) is True:
-                        order_handler.manage_orders(instruments, live_data)
-
-                for token in instruments.keys():
-                    instruments[token].refresh_data(kite_login, current_time)
-                    instruments[token].load_momentum_analysis(kite_login, live_data, instrument_token, current_time)
-                    instruments[token].load_current_data_analysis(live_data, instrument_token)
-                    instruments[token].print_analysis_details()
-                    if not instruments[token].order_ids():
-                        instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
+        on_ticks_load(live_data_loaded_at, current_time) 
+        live_data_loaded_at = current_time
+        
+        positions_reloaded = order_handler.reload_positions(instruments, True)
+        live_data.analyser.load_current_data(False)
+        if positions_reloaded is not None:
+            if positions_reloaded:
+                if order_handler.fill_orders(instruments) is True and setting.manage_position:
+                    order_handler.manage_orders(instruments, live_data)
                     
-            order_handler.cancel_invalid_sl_orders(live_data, instruments)
-            
-            # Unsubscribe unused tokens
-            unused_tokens = set(kws.subscribed_tokens.keys()) - set(subscribed_list)
-            kws.unsubscribe(list(unused_tokens))
-        except Exception as e:
-            logging.error(f"Error on loop: {e}")
-            if re.match('Error in connecting kite connect', str(e)):
-                kite_login.connect()
-            logging.error(traceback.format_exc())
-    else:
-        kws.close()
-        kws.connect(threaded=True)
+            for token in instruments.keys():
+                instruments[token].refresh_data(kite_login, current_time)
+                instruments[token].load_momentum_analysis(kite_login, live_data, instrument_token, current_time)
+                instruments[token].load_current_data_analysis(live_data, instrument_token)
+                instruments[token].print_analysis_details(False)
+                if not instruments[token].order_ids():
+                    instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
+                
+        order_handler.cancel_invalid_sl_orders(live_data, instruments)
+        
+        # Unsubscribe unused tokens
+        # unused_tokens = set(kws.subscribed_tokens.keys()) - set(subscribed_list)
+        # kws.unsubscribe(list(unused_tokens))
+    except Exception as e:
+        logging.error(f"Error on loop: {e}")
+        if re.match('Error in connecting kite connect', str(e)):
+            kite_login.connect()
+        logging.error(traceback.format_exc())
     
     time.sleep(5)  # Main loop delay 10 sec

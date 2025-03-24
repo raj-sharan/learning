@@ -77,11 +77,3 @@ class Util:
             
         return datetime(time.year, time.month, time.day, time.hour, time.minute)
         
-        
-
-# # Get current time
-# current_time = datetime.now().astimezone()
-
-# # Generate ID
-# unique_id = Util.generate_id(current_time)
-# print(unique_id)

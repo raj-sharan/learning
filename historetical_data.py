@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import pandas as pd
 import time
+import traceback
 
 from db_connect import PostgresDB
 from common import Util
@@ -10,7 +11,7 @@ class HistoricalData:
     def __init__(self, setting, token, logging):
         self.token = token
         self.setting = setting
-        self.db_conn = PostgresDB(setting)
+        self.db_conn = PostgresDB(setting, logging)
         self.required_5m_data_count = 210
         self.required_30m_data_count = 15
         self.data_5min = None
@@ -122,9 +123,8 @@ class HistoricalData:
         
         return self.save_data_to_db(full_data, self.setting.table_name_5m)
 
-    def sync_five_min_data_for_day(self, kite_login):
+    def sync_five_min_data_for_day(self, kite_login, current_time):
         collected    = False
-        current_time = datetime.now()
         started_at   = datetime.now()
     
         self.logging.info(f"Started fetching {self.token} at {started_at}")
@@ -294,11 +294,13 @@ class HistoricalData:
         
         return self.save_data_to_db(full_data, self.setting.table_name_30m)
 
-    def load_5min_data(self):
+    def load_5min_data(self, unique_key):
         try:
             if self.data_5min is None:
                 self.db_conn.connect()
-                query = "SELECT date, open, high, low, close, unique_key, token FROM %s where token = %s" % (self.setting.table_name_5m, self.token) 
+                query = """SELECT date, open, high, low, close, unique_key, token FROM %s
+                where token = %s and unique_key < %s
+                """ % (self.setting.table_name_5m, self.token, unique_key) 
                 
                 self.data_5min = self.db_conn.get_records_in_data_frame(query)
         except Exception as e:
@@ -309,6 +311,26 @@ class HistoricalData:
 
         return self.data_5min
 
+    def load_5m_current_data(self, from_dt, to_dt):
+        try:
+            from_unique_key = Util.generate_5m_id(from_dt)
+            to_unique_key = Util.generate_5m_id(to_dt)
+            
+            self.db_conn.connect()
+            query = """SELECT date, open, high, low, close, token FROM %s
+            where token = %s and unique_key >= %s and unique_key < %s
+            """ % (self.setting.table_name_5m, self.token, from_unique_key, to_unique_key)
+            
+            return self.db_conn.get_records_in_data_frame(query)
+               
+        except Exception as e:
+            self.logging.error(f"Error in loading 5min data for {self.token}: {e}")
+        finally:
+            if self.db_conn is not None:
+                self.db_conn.close()
+
+        return pd.DataFrame([])
+        
     def load_30min_data(self):
         try:
             if self.data_30min is None:
@@ -334,6 +356,8 @@ class HistoricalData:
             executed = True
         except Exception as e:
             self.logging.error(f"Error cleaning records for {self.token}: {e}")
+            self.logging.error(traceback.format_exc())
+            
         finally:
             self.db_conn.close()
         return executed
