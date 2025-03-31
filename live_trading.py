@@ -151,8 +151,9 @@ def trading_windows(current_time):
     return from_dt < current_time < to_dt
 
 start_time = datetime.now()
-start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 10)
+start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 15)
 unique_key = Util.generate_5m_id(start_time)
+
 # Reload data for all tokens
 for token in tokens:
     reload_data(token, unique_key)
@@ -197,8 +198,9 @@ while True:
                     subscribed_list.extend(subscribed_strike_price_tokens)
 
             positions_reloaded = order_handler.reload_positions(instruments)
-            live_data.analyser.load_current_data()
             if positions_reloaded is not None:
+                if not setting.manage_position:
+                    logging.warn('Note: Manage position is disabled.')
                 if positions_reloaded and setting.manage_position:
                     if order_handler.fill_orders(instruments) is True:
                         order_handler.manage_orders(instruments, live_data)
@@ -210,12 +212,13 @@ while True:
                     instruments[token].print_analysis_details()
                     if not instruments[token].order_ids():
                         instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
-                    
+
+            live_data.analyser.load_current_data(current_time)
             order_handler.cancel_invalid_sl_orders(live_data, instruments)
             
             # Unsubscribe unused tokens
             unused_tokens = set(kws.subscribed_tokens.keys()) - set(subscribed_list)
-            kws.unsubscribe(list(unused_tokens))
+            # kws.unsubscribe(list(unused_tokens))
         except Exception as e:
             logging.error(f"Error on loop: {e}")
             if re.match('Error in connecting kite connect', str(e)):

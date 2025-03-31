@@ -352,6 +352,8 @@ class HistoricalData:
             self.db_conn.connect()
             query = f"TRUNCATE {table_name} RESTART IDENTITY"
             self.db_conn.execute_query(query)
+            query2 = f"TRUNCATE tick_details RESTART IDENTITY"
+            self.db_conn.execute_query(query2)
             self.db_conn.commit()
             executed = True
         except Exception as e:

@@ -79,36 +79,23 @@ historical_data_30m_sql = """
 
 processed_details = """
     CREATE TABLE IF NOT EXISTS processed_details (
-        id SERIAL PRIMARY KEY,
-        parent_token BIGINT NOT NULL,
-        unique_key BIGINT NOT NULL,
-        date TIMESTAMP NOT NULL,
-        sma_20 DECIMAL(10, 2) NOT NULL,
-        is_bullish BOOL NOT NULL DEFAULT FALSE,
-        is_bearish BOOL NOT NULL DEFAULT FALSE,
-        ce_token BIGINT NOT NULL,
-        ce_beta DECIMAL(10, 2) NOT NULL,
-        ce_oi DECIMAL(10, 2) NOT NULL,
-        ce_quantity DECIMAL(10, 2) NOT NULL,
-        pe_token BIGINT NOT NULL,
-        pe_beta DECIMAL(10, 2) NOT NULL,
-        pe_oi DECIMAL(10, 2) NOT NULL,
-        pe_quantity DECIMAL(10, 2) NOT NULL,
-        curr_oi DECIMAL(10, 2) NOT NULL,
-        curr_volume DECIMAL(10, 2) NOT NULL,
-        volume DECIMAL(10, 2) NOT NULL, 
-        curr_quantities DECIMAL(10, 2) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (parent_token, unique_key)
+    id SERIAL PRIMARY KEY,
+    unique_key BIGINT NOT NULL,
+    date TIMESTAMP NOT NULL,
+    is_bullish BOOL NOT NULL DEFAULT FALSE,
+    is_bearish BOOL NOT NULL DEFAULT FALSE,
+    direction TEXT NOT NULL,
+    ce_token BIGINT NOT NULL,
+    ce_beta DECIMAL(10, 2) NOT NULL,
+    ce_oi DECIMAL(10, 2) NOT NULL,
+    old_ce_oi DECIMAL(10, 2) NOT NULL,
+    pe_token BIGINT NOT NULL,
+    pe_beta DECIMAL(10, 2) NOT NULL,
+    pe_oi DECIMAL(10, 2) NOT NULL,
+    old_pe_oi DECIMAL(10, 2) NOT NULL,
+    ce_curr_oi DECIMAL(10, 2) NOT NULL,
+    pe_curr_oi DECIMAL(10, 2) NOT NULL
     );
-
-    -- Add an index on (parent_token, unique_key)
-    CREATE UNIQUE INDEX processed_details_token_unique_key 
-    ON processed_details (parent_token, unique_key);
-    
-    -- Add an index on (parent_token, date) for faster date-based queries
-    CREATE INDEX processed_details_token_date 
-    ON processed_details (parent_token, date);
 """
 
 tick_details = """
@@ -140,7 +127,7 @@ s = db.connect(auto = True)
 print(s)
     
 # db.create_database("sharemarkets")
-db.create_tables(tick_details)
+db.create_tables(processed_details)
 
 db.close()
 

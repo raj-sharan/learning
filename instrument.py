@@ -28,6 +28,8 @@ class Instrument:
         self.premium_data = {}
         self.ce_pe_token = {'ce_token': None, 'pe_token': None}
         self.reuse_tokens = False
+        self.last_order_key = None
+        self.market_trend = {'low': None, 'high': None, 'direction': None, 'change': False}
 
     def order_ids(self):
         return self.orders.keys()
@@ -70,9 +72,7 @@ class Instrument:
                             self.historical_data_5m.drop(self.historical_data_5m[self.historical_data_5m['unique_key'] >= threshold].index, inplace=True)
                             self.historical_data_5m = pd.concat([self.historical_data_5m, data_df], ignore_index=True)
                             self.historical_data_5m["SMA-200"] = moving_average_close_200sma(self.historical_data_5m)
-                            self.historical_data_5m["SMA-50"] = moving_average_close_50sma(self.historical_data_5m)
                             self.historical_data_5m["SMA-20"] = moving_average_close_20sma(self.historical_data_5m)
-                            self.historical_data_5m["SMA-15"] = moving_average_close_15sma(self.historical_data_5m)
                             self.historical_data_5m["SMA-9"] = moving_average_close_9sma(self.historical_data_5m)
                             # self.historical_data_5m["ATR"] = atr(self.historical_data_5m)
                             # self.historical_data_5m.drop(columns=['previous_close', 'high_low', 'high_close', 'low_close'], inplace=True)
@@ -128,11 +128,13 @@ class Instrument:
             candle_5m = self.historical_data_5m.iloc[-1]
             unique_key = Util.generate_5m_id(candle_5m['date'])
             if not self.momentum_result or self.momentum_result['unique_key'] != unique_key:
+                self.load_trend_direction()
                 self.reuse_tokens = False
-                candle_set = self.historical_data_5m.tail(3)
+                candle_set = self.historical_data_5m.tail(4)
+               
                 is_bullish = valid_bulish_patterns(len(candle_set) - 1, candle_set)
                 is_bearish = valid_bearish_patterns(len(candle_set) - 1, candle_set)
-                
+
                 sma_20 = candle_5m["SMA-20"]
 
                 ce_token, pe_token = self.get_ce_pe_tokens(instrument_token, live_data)
@@ -147,6 +149,11 @@ class Instrument:
                 if not momentums:
                     return None
 
+                old_ce_oi = old_pe_oi = 0.0
+                if self.momentum_result:
+                    old_ce_oi = self.momentum_result['ce_oi']
+                    old_pe_oi = self.momentum_result['pe_oi']
+                    
                 self.momentum_result = {
                     'parent_token' : self.token,
                     'unique_key': unique_key,
@@ -157,56 +164,65 @@ class Instrument:
                     'ce_token' : ce_token, 
                     'ce_beta' : round(momentums['beta']['ce_beta'], 2) if 'beta' in momentums else 0.0,
                     'ce_oi' : round(momentums['oi_data']['ce_oi'], 2)  if 'oi_data' in momentums else 0.0,
+                    'old_ce_oi': old_ce_oi,
                     'ce_oi_change' : round(momentums['oi_data']['ce_oi_change'], 2) if 'oi_data' in momentums else 0.0,
                     'ce_volume': momentums['ce_volume'] if 'ce_volume' in momentums else 0,
                     'pe_token': pe_token, 
                     'pe_beta': round(momentums['beta']['pe_beta'], 2) if 'beta' in momentums else 0.0, 
                     'pe_oi': round(momentums['oi_data']['pe_oi'], 2) if 'oi_data' in momentums else 0.0,
+                    'old_pe_oi': old_pe_oi,
                     'pe_oi_change': round(momentums['oi_data']['pe_oi_change'], 2)  if 'oi_data' in momentums else 0.0,
                     'pe_volume': momentums['pe_volume'] if 'pe_volume' in momentums else 0
                 }
-
                 
     def load_current_data_analysis(self, live_data, instrument_token):
-        ce_oi = pe_oi = 0
         ce_token = pe_token = None
         unique_key = None
+        old_ce_oi = old_pe_oi = 0.0
+        ce_oi = pe_oi = 0.0
+
         if self.momentum_result:
-            ce_oi = self.momentum_result['ce_oi']
-            pe_oi = self.momentum_result['pe_oi']
             ce_token = self.momentum_result['ce_token']
             pe_token = self.momentum_result['pe_token']
             unique_key = self.momentum_result['unique_key']
+            old_ce_oi = self.momentum_result['old_ce_oi']
+            old_pe_oi = self.momentum_result['old_pe_oi']
+            ce_oi = self.momentum_result['ce_oi']
+            pe_oi = self.momentum_result['pe_oi']
             
         if ce_token is None or pe_token is None:     
             ce_token, pe_token = self.get_ce_pe_tokens(instrument_token, live_data)
 
-        if ce_token and pe_token:     
+        if ce_token and pe_token:
+            token_data = live_data.get_current_data(self.token)
             ce_token_data = live_data.get_current_data(ce_token)
             pe_token_data = live_data.get_current_data(pe_token)
 
-            if ce_token_data and pe_token_data:
-                self.current_data_analysis['unique_key'] = unique_key
-                self.current_data_analysis['ce_price'] = ce_token_data['price']
-                self.current_data_analysis['ce_curr_oi'] = ce_token_data['oi']
-                # print('++++++++++++++++++++++++++CE')
-                # print([float(ce_token_data['oi']), float(ce_oi), float(ce_token_data['oi']) - float(ce_oi)])
-                self.current_data_analysis['ce_curr_oi_change'] = float(ce_token_data['oi']) - float(ce_oi) if float(ce_oi) > 0.0 else 0.0
-                
-                self.current_data_analysis['pe_price'] = pe_token_data['price']
-                self.current_data_analysis['pe_curr_oi'] = pe_token_data['oi']
-                # print('++++++++++++++++++++++++++PE')
-                # print([float(pe_token_data['oi']), float(pe_oi), float(pe_token_data['oi']) - float(pe_oi)])
-                self.current_data_analysis['pe_curr_oi_change'] = float(pe_token_data['oi']) - float(pe_oi) if float(pe_oi) > 0.0 else 0.0
+            if ce_token_data and pe_token_data:  
+                self.current_data_analysis['old_ce_pe_oi_ratio'] = float(old_ce_oi) / float(old_pe_oi) if float(old_pe_oi) != 0 else 0.0
 
-                self.current_data_analysis['ce_pe_oi_ratio'] = round(ce_token_data['oi'] / pe_token_data['oi'], 2) if pe_token_data['oi'] != 0 else 0.0
-               
+                self.current_data_analysis['ce_curr_oi'] = ce_token_data['oi']
+                self.current_data_analysis['pe_curr_oi'] = pe_token_data['oi']
+                self.current_data_analysis['unique_key'] = unique_key
+                
+                self.current_data_analysis['last_price'] = token_data['price']
+                self.current_data_analysis['ce_price'] = ce_token_data['price']
+                self.current_data_analysis['pe_price'] = pe_token_data['price']
+                
+                self.current_data_analysis['ce_oi_change'] = float(ce_token_data['oi']) - float(ce_oi) if float(ce_oi) > 0.0 else 0.0
+                self.current_data_analysis['pe_oi_change'] = float(pe_token_data['oi']) - float(pe_oi) if float(pe_oi) > 0.0 else 0.0
+
+                self.current_data_analysis['ce_oi_ratio'] = float(ce_token_data['oi']) / float(ce_oi) if float(ce_oi) != 0 else 0.0
+                self.current_data_analysis['pe_oi_ratio'] = float(pe_token_data['oi']) / float(pe_oi) if float(pe_oi) != 0 else 0.0
+
+                self.current_data_analysis['ce_pe_oi_ratio'] = float(ce_token_data['oi']) / float(pe_token_data['oi']) if float(pe_token_data['oi']) != 0 else 0.0
+                self.current_data_analysis['pe_ce_oi_ratio'] = float(pe_token_data['oi']) / float(ce_token_data['oi']) if float(ce_token_data['oi']) != 0 else 0.0
 
     def print_analysis_details(self, should_save = True):
         # Create DataFrame with the desired columns
         print_df = pd.DataFrame(columns=['Property', '|', 'CE', '|','PE'])
         print_df.loc[len(print_df)] = ["----------------", '|', "------", '|', "------"]
-
+        
         # Add rows from momentum_result
         if self.momentum_result:
             bullish = 'Bullish' if self.momentum_result['is_bullish'] else '-'
@@ -216,85 +232,105 @@ class Instrument:
             
         # Add rows from current_data_analysis
         if self.current_data_analysis:
-            print_df.loc[len(print_df)] = ["Curr OI Change", '|', self.current_data_analysis['ce_curr_oi_change'], '|', self.current_data_analysis['pe_curr_oi_change']]
-            print_df.loc[len(print_df)] = ["OI Ratio", '|', self.current_data_analysis['ce_pe_oi_ratio'], '|', '-']
+            print_df.loc[len(print_df)] = [
+                "Curr OI Change", '|', 
+                self.current_data_analysis['ce_oi_change'], '|', 
+                self.current_data_analysis['pe_oi_change']
+            ]
+            ce_oi_ratio = f"{self.current_data_analysis['ce_oi_ratio']:.4f}".rstrip('0').rstrip('.')
+            pe_oi_ratio = f"{self.current_data_analysis['pe_oi_ratio']:.4f}".rstrip('0').rstrip('.')
+            print_df.loc[len(print_df)] = ["OI Ratio", '|', ce_oi_ratio, '|', pe_oi_ratio]
+            print_df.loc[len(print_df)] = ["CE-PE OI Ratio", '|', self.current_data_analysis['ce_pe_oi_ratio'], '|', self.current_data_analysis['pe_ce_oi_ratio']]
 
         print_df.loc[len(print_df)] = ["----------------", '|', "------", '|', "------"]
         # Display the DataFrame nicely
-        print(print_df)
-            
-        if not self.historical_data_5m.empty and self.momentum_result:
-            candle_5m = self.historical_data_5m.iloc[-1]
-            direction = 'NA'
-            if candle_5m['close'] > candle_5m['open'] + 5:
-                direction = 'UP'
-                if abs(self.momentum_result['pe_beta']) > abs(self.momentum_result['ce_beta']):
-                    direction = '✅ CE'
-                    
-            elif candle_5m['open'] > candle_5m['close'] + 5:
-                direction = 'DOWN'
-                if abs(self.momentum_result['ce_beta']) > abs(self.momentum_result['pe_beta']):
-                    direction = '❌ PE'
-            
-            print(f'Signal : {direction} candle at {candle_5m['date']}')
+        # print(print_df)
+
+        date = self.momentum_result['date'] if self.momentum_result else ''
+        direction = self.market_trend['direction']
+        price = self.current_data_analysis['last_price'] if self.current_data_analysis else ' '
+        print(f'Signal : {direction} candle at {date}, Last Price: {price}')
+    
+        columns_order = [
+            'unique_key', 'date', 'is_bullish', 'is_bearish', 'direction',
+            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi',
+            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi',
+            'ce_curr_oi', 'pe_curr_oi'
+        ]
+        if self.momentum_result and self.current_data_analysis:
+            data_to_print = pd.DataFrame(columns=columns_order)
+            data_to_print = data_to_print._append({
+                'unique_key': self.momentum_result['unique_key'],
+                'date': self.momentum_result['date'],
+                'is_bullish': self.momentum_result['is_bullish'],
+                'is_bearish': self.momentum_result['is_bearish'],
+                'direction': direction,
+                'ce_token': self.momentum_result['ce_token'],
+                'ce_beta': self.momentum_result['ce_beta'],
+                'ce_oi': self.momentum_result['ce_oi'],
+                'old_ce_oi': self.momentum_result['old_ce_oi'],
+                'pe_token': self.momentum_result['pe_token'],
+                'pe_beta': self.momentum_result['pe_beta'],
+                'pe_oi': self.momentum_result['pe_oi'],
+                'old_pe_oi': self.momentum_result['old_pe_oi'],
+                'ce_curr_oi': self.current_data_analysis['ce_curr_oi'],
+                'pe_curr_oi': self.current_data_analysis['pe_curr_oi']
+            }, ignore_index=True)
+            # print(data_to_print)
+            if should_save:
+                self.save_data_to_db(data_to_print)
         
-    def execute_trade_opportunity(self, kite_login, live_data, instrument_token, current_time):     
+    def execute_trade_opportunity(self, kite_login, live_data, instrument_token, current_time):
         if self.refresh_till_5m is None or not self.momentum_result or not self.current_data_analysis:
             return
-                
-        if current_time > self.refresh_till_5m and current_time - self.refresh_till_5m < timedelta(minutes = 5):
+
+        last_order_old = self.last_order_key is None or self.last_order_key != self.momentum_result['unique_key']
+        if last_order_old and current_time > self.refresh_till_5m and current_time - self.refresh_till_5m < timedelta(minutes = 5):
             candle_5m = self.historical_data_5m.iloc[-1]
-            
             check_unique_key = (
                 candle_5m['unique_key'] == self.momentum_result['unique_key']
                 and candle_5m['unique_key'] == self.current_data_analysis['unique_key']
             )
-            
             if check_unique_key: 
                 candle_5m = self.historical_data_5m.iloc[-1]
-                body = candle_5m['close'] - candle_5m['open']
-        
-                sma_200 = candle_5m["SMA-200"]
-                sma_50 = candle_5m["SMA-50"]
+                prev_candle_5m = self.historical_data_5m.iloc[-2]
+
+                pre_sma_20 = prev_candle_5m["SMA-20"]
                 sma_20 = candle_5m["SMA-20"]
-                sma_15 = candle_5m["SMA-15"]
                 sma_9 = candle_5m["SMA-9"]
-                pre_candle_5m = self.historical_data_5m.iloc[-2]
                 is_bullish = self.momentum_result['is_bullish']
                 is_bearish = self.momentum_result['is_bearish']
-                if is_bullish: #or abs(self.momentum_result['pe_beta']) > abs(self.momentum_result['ce_beta']): 
-                    on_line = sma_200 + 3 >= candle_5m["low"] or sma_50 + 3 >= candle_5m["low"]
-                    on_line = on_line or sma_20 + 3 >= candle_5m["low"] or sma_15 + 3 >= candle_5m["low"] or sma_9 + 3 >= candle_5m["low"]
-                    if on_line and body > 5 and abs(self.momentum_result['pe_beta']) > abs(self.momentum_result['ce_beta']):
-                        ce_oi_change = self.current_data_analysis['ce_curr_oi_change']
-                        pe_oi_change = self.current_data_analysis['pe_curr_oi_change']
-                        if (ce_oi_change > 0.0 and pe_oi_change < 0.0) or (ce_oi_change < 0.0 and pe_oi_change > 0.0):
-                            print(f'✅ Buy CE (Bullish) at {candle_5m['date']}')
-                            self.buy_premium('CE', kite_login, live_data, instrument_token, current_time)
-                        elif (ce_oi_change > 0.0 and pe_oi_change > 0.0) or (ce_oi_change < 0.0 and pe_oi_change < 0.0):
-                            if self.current_data_analysis['ce_pe_oi_ratio'] >= 2.5:
+                ce_pe_oi_ratio = self.current_data_analysis['ce_pe_oi_ratio']
+
+                is_baught = False
+                if is_bullish and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
+                    on_line = sma_20 + 3 >= candle_5m["low"] or sma_9 + 3 >= candle_5m["low"]
+                    if on_line and self.current_data_analysis['pe_oi_ratio'] > 1.0:
+                        if ce_pe_oi_ratio > 1.5:
+                            if self.market_trend['change'] and self.current_data_analysis['old_ce_pe_oi_ratio'] < 1.1:
+                                is_baught = True
                                 print(f'✅ Buy CE (Bullish) at {candle_5m['date']}')
-                                self.buy_premium('CE', kite_login, live_data, instrument_token, current_time)
-                            elif self.current_data_analysis['ce_pe_oi_ratio'] > .7:
-                                print(f'✅ Buy CE (Scalping) at {candle_5m['date']}')
-                                self.buy_premium('CE', kite_login, live_data, instrument_token, current_time, True)
-                
-                if is_bearish: #or abs(self.momentum_result['ce_beta']) > abs(self.momentum_result['pe_beta']):
-                    on_line = sma_200 - 3 <= candle_5m["high"] or sma_50 - 3 <= candle_5m["high"]
-                    on_line = on_line or sma_20 - 3 <= candle_5m["high"] or sma_15 - 3 <= candle_5m["high"] or sma_9 - 3 <= candle_5m["high"]
-                    if on_line and body < -5 and abs(self.momentum_result['ce_beta']) > abs(self.momentum_result['pe_beta']):
-                        ce_oi_change = self.current_data_analysis['ce_curr_oi_change']
-                        pe_oi_change = self.current_data_analysis['pe_curr_oi_change']
-                        if (ce_oi_change > 0.0 and pe_oi_change < 0.0) or (ce_oi_change < 0.0 and pe_oi_change > 0.0):
-                            print(f'❌ Buy PE (Bearish) at {candle_5m['date']}')
-                            self.buy_premium('PE', kite_login, live_data, instrument_token, current_time)
-                        elif (ce_oi_change > 0.0 and pe_oi_change > 0.0) or (ce_oi_change < 0.0 and pe_oi_change < 0.0):
-                            if self.current_data_analysis['ce_pe_oi_ratio'] <= .7:
+                                # self.buy_premium('CE', kite_login, live_data, instrument_token, current_time)
+
+                elif is_bearish and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
+                    on_line = sma_20 - 3 <= candle_5m["high"] or sma_9 - 3 <= candle_5m["high"]
+                    if on_line and (self.current_data_analysis['ce_oi_ratio'] > 1.0):
+                       if ce_pe_oi_ratio < 0.6:
+                           if self.market_trend['change'] and self.current_data_analysis['old_ce_pe_oi_ratio'] > 0.9:
+                                is_baught = True
                                 print(f'❌ Buy PE (Bearish) at {candle_5m['date']}')
-                                self.buy_premium('PE', kite_login, live_data, instrument_token, current_time)
-                            elif self.current_data_analysis['ce_pe_oi_ratio'] < 2.5:
-                                print(f'❌ Buy PE (Scalping) at {candle_5m['date']}')
-                                self.buy_premium('PE', kite_login, live_data, instrument_token, current_time, True)
+                                # self.buy_premium('PE', kite_login, live_data, instrument_token, current_time)
+                            
+                if not is_baught and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
+                    # print([self.current_data_analysis['old_ce_pe_oi_ratio'], sma_20, pre_sma_20 + 1.0, sma_20 > pre_sma_20 + 0.5])
+                    if ce_pe_oi_ratio > 1.5 and self.current_data_analysis['old_ce_pe_oi_ratio'] < 0.7:
+                        if sma_20 > pre_sma_20 + 0.5 and self.current_data_analysis['pe_oi_ratio'] > 1.0:
+                            print(f'✅ Buy CE (Scalping) at {candle_5m['date']}')
+                            # self.buy_premium('CE', kite_login, live_data, instrument_token, current_time, True)
+                    elif ce_pe_oi_ratio < 0.6 and self.current_data_analysis['old_ce_pe_oi_ratio'] > 1.3:
+                        if sma_20 < pre_sma_20 - 0.5 and self.current_data_analysis['ce_oi_ratio'] > 1.0:
+                            print(f'❌ Buy PE (Scalping) at {candle_5m['date']}')
+                            # self.buy_premium('PE', kite_login, live_data, instrument_token, current_time, True) 
 
     def buy_premium(self, ce_pe, kite_login, live_data, instrument_token, current_time, scalping = False):
         session_end_dt = datetime(current_time.year, current_time.month, current_time.day, 14, 55)
@@ -354,6 +390,7 @@ class Instrument:
                             
                             if order_id is not None:
                                 self.orders[ce_token] = order
+                                self.last_order_key = self.momentum_result['unique_key']
                                 self.logging.info(f"Order placed for {ce_symbol} with order id {order_id}")
                         else:
                             self.low_margin_at = datetime.now()
@@ -414,6 +451,7 @@ class Instrument:
                         
                             if order_id is not None:
                                 self.orders[pe_token] = order
+                                self.last_order_key = self.momentum_result['unique_key']
                                 self.logging.info(f"Order placed for {pe_symbol} with order id {order_id}")
                         else:
                             self.low_margin_at = datetime.now()
@@ -471,24 +509,84 @@ class Instrument:
         self.ce_pe_token['pe_token'] = pe_token
 
         return ce_token, pe_token
+
+    def load_trend_direction(self):
+        if not self.historical_data_5m.empty and len(self.historical_data_5m) > 2:
+            if self.market_trend['direction']:
+                prev_candle = self.historical_data_5m.iloc[-2]
+                current_candle = self.historical_data_5m.iloc[-1]
+                open = current_candle['open']
+                close = current_candle['close']
+                body = abs(open - close)
+                prev_color = "Green" if prev_candle['close'] > prev_candle['open'] else "Red"
+                curr_color = "Green" if current_candle['close'] > current_candle['open'] else "Red"
+    
+                if curr_color == "Green" and body > 5:
+                    self.market_trend['low'] = current_candle['low']
+                elif curr_color == "Red" and body > 5:
+                    self.market_trend['high'] = current_candle['high']
+
+                self.market_trend['change'] = False
+                if self.market_trend['direction'] == 'Up' and curr_color == "Red" and close + 0.5 < self.market_trend['low']:
+                    self.market_trend['direction'] = 'Down'  # Fixed assignment
+                    self.market_trend['change'] = True
+                elif self.market_trend['direction'] == 'Down' and curr_color == "Green" and close > self.market_trend['high'] + 0.5:
+                    self.market_trend['direction'] = 'Up'  # Fixed assignment
+                    self.market_trend['change'] = True
+            else:
+                green_max_close = 0
+                red_min_close = float('inf')  # Initialize to a very high value
+    
+                for i in range(len(self.historical_data_5m) - 1, 0, -1):  # Start from the most recent candle
+                    prev_candle = self.historical_data_5m.iloc[i - 1]
+                    current_candle = self.historical_data_5m.iloc[i]
+    
+                    if current_candle['close'] > current_candle['open']:  # Green candle
+                        green_max_close = max(green_max_close, current_candle['close'])
+                        red_min_close = float('inf')  # Reset red_min_close only here
+                    else:  # Red candle
+                        red_min_close = min(red_min_close, current_candle['close'])
+                        green_max_close = 0  # Reset green_max_close
+    
+                    prev_color = "Green" if prev_candle['close'] > prev_candle['open'] else "Red"
+                    curr_color = "Green" if current_candle['close'] > current_candle['open'] else "Red"
+    
+                    if self.market_trend['low'] is None and curr_color == 'Green':
+                        self.market_trend['low'] = current_candle['low']
+    
+                    if self.market_trend['high'] is None and curr_color == 'Red':
+                        self.market_trend['high'] = current_candle['high']
+    
+                    if curr_color != prev_color:  # Check trend change
+                        if green_max_close > 0 and green_max_close > prev_candle['high'] + 0.5:
+                            self.market_trend['direction'] = 'Up'
+                        elif red_min_close < float('inf') and red_min_close + 0.5 < prev_candle['low']:
+                            self.market_trend['direction'] = 'Down'
+    
+                    if self.market_trend['direction'] and self.market_trend['low'] and self.market_trend['high']:
+                        break  # Stop the loop early if all values are set
+    
+        return None  # No trend reversal found
+
+
         
     def save_data_to_db(self, df):
         saved = False
         table_name = 'processed_details'
 
         columns_order = [
-            'parent_token', 'unique_key', 'date', 'sma_20', 'is_bullish', 'is_bearish',
-            'ce_token', 'ce_beta', 'ce_oi', 'ce_quantity', 
-            'pe_token', 'pe_beta', 'pe_oi', 'pe_quantity', 
-            'curr_oi', 'curr_volume', 'volume', 'curr_quantities'
+            'unique_key', 'date', 'is_bullish', 'is_bearish', 'direction',
+            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi',
+            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi',
+            'ce_curr_oi', 'pe_curr_oi'
         ]
         
         df = df[columns_order]
         
         try:
-            query = """INSERT INTO %s(parent_token, unique_key, date, sma_20, is_bullish, is_bearish, 
-                        ce_token, ce_beta, ce_oi, ce_quantity, pe_token, pe_beta, pe_oi, pe_quantity, 
-                        curr_oi, curr_volume, volume, curr_quantities) VALUES %%s""" % (table_name)
+            query = """INSERT INTO %s(unique_key, date, is_bullish, is_bearish, direction,
+                        ce_token, ce_beta, ce_oi, old_ce_oi, pe_token, pe_beta, pe_oi, old_pe_oi,
+                        ce_curr_oi, pe_curr_oi) VALUES %%s""" % (table_name)
     
             # Ensure the database connection is established
             self.db_conn.connect()

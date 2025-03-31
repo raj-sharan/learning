@@ -67,6 +67,8 @@ class PostgresDB:
                 self.logging.debug("⚠️ No active database connection.")
                 return False
 
+            # print(query)
+            # print(batch_data)
             extras.execute_values(self.cur, query, batch_data) 
         
             self.logging.debug("✅ Query executed successfully.")

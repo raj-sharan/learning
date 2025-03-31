@@ -14,42 +14,44 @@ class MomentumAnalyser:
 
     def load_ticks(self, ticks):
         self.ticks_data.extend(ticks)
+            
         
-    def load_current_data(self, should_save = True):
+    def load_current_data(self, current_time, should_save = True):
         ticks_data = self.ticks_data.copy()
 
-        for tick in ticks_data:
-            if 'exchange_timestamp' not in tick:
-                self.logging.error("exchange_timestamp missing")
-                continue
+        if self.trading_windows(current_time):
+            for tick in ticks_data:
+                if 'exchange_timestamp' not in tick:
+                    self.logging.error("exchange_timestamp missing")
+                    continue
+                    
+                timestamp = tick['exchange_timestamp']
+                 # Generate a unique key (not used yet in the DataFrame)
+                unique_key = Util.generate_5m_id(timestamp)
+    
+                token = tick['instrument_token']
+                last_price = tick['last_price']
+                oi = tick['oi'] if 'oi' in tick else 0
+                volume_traded = tick['volume_traded'] if 'volume_traded' in tick else 0
                 
-            timestamp = tick['exchange_timestamp']
-             # Generate a unique key (not used yet in the DataFrame)
-            unique_key = Util.generate_5m_id(timestamp)
-
-            token = tick['instrument_token']
-            last_price = tick['last_price']
-            oi = tick['oi'] if 'oi' in tick else 0
-            volume_traded = tick['volume_traded'] if 'volume_traded' in tick else 0
-            
-            bid_volume, offer_volume = self.fetch_bid_offer_volume(tick)
-            time = datetime(timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute, timestamp.second)
-            # Create DataFrame with a single row
-            df = pd.DataFrame([{
-                'token': token,
-                'unique_key': unique_key,
-                'date': time,
-                'last_price': last_price,
-                'oi': oi,
-                'volume_traded': volume_traded,
-                'bid_volume': bid_volume,
-                'offer_volume': offer_volume
-            }])
-
-            if should_save:
-                self.save_data_to_db(df)
-
-            # self.current_data_df = pd.concat([self.current_data_df, df], ignore_index=True)
+                bid_volume, offer_volume = self.fetch_bid_offer_volume(tick)
+                time = datetime(timestamp.year, timestamp.month, timestamp.day, timestamp.hour, timestamp.minute, timestamp.second)
+                # Create DataFrame with a single row
+                df = pd.DataFrame([{
+                    'token': token,
+                    'unique_key': unique_key,
+                    'date': time,
+                    'last_price': last_price,
+                    'oi': oi,
+                    'volume_traded': volume_traded,
+                    'bid_volume': bid_volume,
+                    'offer_volume': offer_volume
+                }])
+    
+                if should_save:
+                    self.save_data_to_db(df)
+    
+                # self.current_data_df = pd.concat([self.current_data_df, df], ignore_index=True)
             
         del self.ticks_data[0:len(ticks_data)]
         ticks_data.clear()
@@ -295,6 +297,8 @@ class MomentumAnalyser:
             if self.db_conn is not None:
                 self.db_conn.close()  # Ensure connection is properly closed
         
-     
-
+    def trading_windows(self, current_time):
+        from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 15)
+        to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 30)
+        return from_dt < current_time < to_dt
     

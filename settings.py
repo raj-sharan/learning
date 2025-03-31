@@ -9,7 +9,7 @@ class Setting:
         self.reload()
         
     def reload(self):
-        if self.last_loaded_at is not None and datetime.now() - self.last_loaded_at <= timedelta(minutes = 5):
+        if self.last_loaded_at is not None and datetime.now() - self.last_loaded_at <= timedelta(seconds = 15):
             return self
             
         with open('config/settings.json', 'r') as file:

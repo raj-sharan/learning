@@ -132,3 +132,6 @@ print(f"Points : {profit}")
 result_df.to_csv("NIFTY50-poc.csv", index=False)
 
 print('Done')
+
+
+

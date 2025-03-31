@@ -21,10 +21,10 @@ class OrderHandler:
         any_position = False
 
         self.position_loaded_at = datetime.now()
-        if not (orders and 'day' in orders):
+        if not (orders and 'net' in orders):
             return None
     
-        for order in orders['day']:  # Iterate over 'day' key in orders
+        for order in orders['net']:  # Iterate over 'day' key in orders
             token = order['instrument_token']
             symbol = order['tradingsymbol']
             name = self.instrument_token.get_name_by_token(token)
@@ -85,7 +85,7 @@ class OrderHandler:
                 price = current_data['price'] if current_data is not None else 0
                 sl_price = round(order.sl_price, 2) if order.sl_price else 0.0
                 
-                self.logging.info(f'Order ({order.symbol}), SL: {sl_price}, Last Price: {price}')
+                self.logging.info(f'Order ({order.symbol}), Scalping: {order.scalping}, SL: {sl_price}, Last Price: {price}')
 
                 if order.scalping is None:
                     self.set_order_scalping_mode(order, instrument)
@@ -139,7 +139,7 @@ class OrderHandler:
     def set_order_scalping_mode(self, order, instrument):
         if instrument.current_data_analysis:
             oi_ratio = instrument.current_data_analysis['ce_pe_oi_ratio']
-            if oi_ratio > 0.7 and oi_ratio < 2.5:
+            if 0.6 < oi_ratio <= 1.5:
                 order.scalping = True
                 
                     

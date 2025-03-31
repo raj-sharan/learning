@@ -18,14 +18,14 @@ from instrument import Instrument
 from instruments_token import InstrumentToken
 from order_handler import OrderHandler
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG,
+logging.basicConfig(stream=sys.stdout, level=logging.INFO,
 	format="%(asctime)s[%(levelname)s] - %(message)s")
 
 warnings.filterwarnings("ignore")
 
 # Initialize
 setting = Setting()
-setting.set_request_token("9xIFsARsq3Iln2jzxhbfDrRA9Y2xHDRG")
+setting.set_request_token("25IQk5EBF3HNKjwMuRG6i4GDp8wuA6bT")
 
 kite_login = KiteLogin(setting, logging)
 kite_login.connect()
@@ -158,8 +158,8 @@ def trading_windows(current_time):
     to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
-start_time = datetime.now() - timedelta(days = 1)
-start_time = datetime(start_time.year, start_time.month, start_time.day, 13, 25)
+start_time = datetime.now() - timedelta(days = 2)
+start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 15)
 unique_key = Util.generate_5m_id(start_time)
 # Reload data for all tokens
 for token in tokens:
@@ -206,7 +206,7 @@ while True:
         live_data_loaded_at = current_time
         
         positions_reloaded = order_handler.reload_positions(instruments, True)
-        live_data.analyser.load_current_data(False)
+    
         if positions_reloaded is not None:
             if positions_reloaded:
                 if order_handler.fill_orders(instruments) is True and setting.manage_position:
@@ -219,7 +219,8 @@ while True:
                 instruments[token].print_analysis_details(False)
                 if not instruments[token].order_ids():
                     instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
-                
+                    
+        live_data.analyser.load_current_data(current_time, False)
         order_handler.cancel_invalid_sl_orders(live_data, instruments)
         
         # Unsubscribe unused tokens
@@ -231,4 +232,4 @@ while True:
             kite_login.connect()
         logging.error(traceback.format_exc())
     
-    time.sleep(5)  # Main loop delay 10 sec
+    time.sleep(1)  # Main loop delay 10 sec
