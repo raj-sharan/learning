@@ -1,7 +1,7 @@
 import os
 
 from datetime import datetime
-from kiteconnect import KiteConnect
+from kiteconnect import KiteConnect, exceptions
 
 class KiteLogin:
     def __init__(self, setting, logging):
@@ -15,9 +15,8 @@ class KiteLogin:
         return self.conn.login_url()
         
     def connect(self):
+        file_path = "config/session.txt"
         try:
-            file_path = "config/session.txt"
-            
             self.conn = KiteConnect(api_key = self.setting.api_key)
             
             if os.path.exists(file_path):
@@ -33,27 +32,29 @@ class KiteLogin:
             
             self.access_token = access_token
             self.conn.set_access_token(access_token)
-           
+
+            if self.is_connected():
+                self.logging.info(f"Connected to kite successfully: {self.conn}")
+                return self.conn
+            else:
+                self.logging.error(f"Unable to connected to kite")
+                      
+        except exceptions.TokenException as e:
+            if os.path.exists(file_path):
+                os.remove(file_path)  # Correct way to delete a file
+                print(f"File {file_path} deleted successfully.")
         except Exception as e:
+            self.logging.error(e.__class__)
             self.logging.error(f"Error in connecting kite connect: {e}")
-            return None
-
-        if not self.is_connected():
-            return None
-
-        self.logging.info(f"Connected to kite successfully: {self.conn}")
         
-        return self.conn
+        return None
+
         
     def is_connected(self):
-        try:
-            profile = self.conn.profile()
-            if profile["user_id"] == self.setting.kite_id:
-                self.profile_name = profile["user_name"]
-                self.logging.info(f"User Profile: == * {self.profile_name} * ==")
-                return True
-        except Exception as e:
-            self.logging.error(f"Error checking connection: {e}")
-            return False
+        profile = self.conn.profile()
+        if profile["user_id"] == self.setting.kite_id:
+            self.profile_name = profile["user_name"]
+            self.logging.info(f"User Profile: == * {self.profile_name} * ==")
+            return True
 
         return False

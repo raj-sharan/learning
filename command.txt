@@ -1,5 +1,6 @@
 To go to virtual python type
 source vPython/bin/activate
+You can run the pip command from here
 
 And start Jupyter by
 jupyter lab

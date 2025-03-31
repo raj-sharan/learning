@@ -1,9 +1,15 @@
 #!/bin/sh
 
 input="$1"  # Read first argument
+input2="$2"
 
 echo "%$input%"  # Print the value
+echo "%$input2%"
 
+if [ "$input2" = "lc" ] || [ "$input" = "lc" ]; then
+    chmod +x kite_login_callback.py
+    ./kite_login_callback.py
+fi
 
 if [ "$input" = "dm" ]; then
     chmod +x db_migrations.py
