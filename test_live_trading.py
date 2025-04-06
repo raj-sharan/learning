@@ -158,7 +158,7 @@ def trading_windows(current_time):
     to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
-start_time = datetime.now() - timedelta(days = 2)
+start_time = datetime.now() - timedelta(days = 1)
 start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 15)
 unique_key = Util.generate_5m_id(start_time)
 # Reload data for all tokens

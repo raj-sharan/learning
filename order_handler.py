@@ -92,7 +92,7 @@ class OrderHandler:
                     
                 if order.should_cancel_position(live_data):  
                     order.cancel_position(self.kite_login)
-                elif order.should_place_sl_order(live_data):
+                elif False and order.should_place_sl_order(live_data):
                     order.place_stop_loss_order(self.kite_login)
                 elif order.invalid_sl_order(live_data):
                     order.cancel_sl_order(self.kite_login)
@@ -133,7 +133,7 @@ class OrderHandler:
         current_time = datetime.now()
         # current_time = datetime(current_time.year, 2, 28, 14, 15)
         from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 15)
-        to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 15)
+        to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 10)
         return current_time > to_dt
 
     def set_order_scalping_mode(self, order, instrument):

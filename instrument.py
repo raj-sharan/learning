@@ -165,12 +165,14 @@ class Instrument:
                     'ce_beta' : round(momentums['beta']['ce_beta'], 2) if 'beta' in momentums else 0.0,
                     'ce_oi' : round(momentums['oi_data']['ce_oi'], 2)  if 'oi_data' in momentums else 0.0,
                     'old_ce_oi': old_ce_oi,
+                    'first_ce_oi': round(momentums['oi_data']['first_ce_oi'], 2)  if 'first_ce_oi' in momentums else 0.0,
                     'ce_oi_change' : round(momentums['oi_data']['ce_oi_change'], 2) if 'oi_data' in momentums else 0.0,
                     'ce_volume': momentums['ce_volume'] if 'ce_volume' in momentums else 0,
                     'pe_token': pe_token, 
                     'pe_beta': round(momentums['beta']['pe_beta'], 2) if 'beta' in momentums else 0.0, 
                     'pe_oi': round(momentums['oi_data']['pe_oi'], 2) if 'oi_data' in momentums else 0.0,
                     'old_pe_oi': old_pe_oi,
+                    'first_pe_oi': round(momentums['oi_data']['first_pe_oi'], 2)  if 'first_pe_oi' in momentums else 0.0,
                     'pe_oi_change': round(momentums['oi_data']['pe_oi_change'], 2)  if 'oi_data' in momentums else 0.0,
                     'pe_volume': momentums['pe_volume'] if 'pe_volume' in momentums else 0
                 }
@@ -189,6 +191,8 @@ class Instrument:
             old_pe_oi = self.momentum_result['old_pe_oi']
             ce_oi = self.momentum_result['ce_oi']
             pe_oi = self.momentum_result['pe_oi']
+            first_ce_oi = self.momentum_result['first_ce_oi']
+            first_pe_oi = self.momentum_result['first_pe_oi']
             
         if ce_token is None or pe_token is None:     
             ce_token, pe_token = self.get_ce_pe_tokens(instrument_token, live_data)
@@ -198,8 +202,9 @@ class Instrument:
             ce_token_data = live_data.get_current_data(ce_token)
             pe_token_data = live_data.get_current_data(pe_token)
 
-            if ce_token_data and pe_token_data:  
-                self.current_data_analysis['old_ce_pe_oi_ratio'] = float(old_ce_oi) / float(old_pe_oi) if float(old_pe_oi) != 0 else 0.0
+            if ce_token_data and pe_token_data:
+                old_ce_pe_oi_ratio = float(old_ce_oi) / float(old_pe_oi) if float(old_pe_oi) != 0 else 0.0
+                self.current_data_analysis['old_ce_pe_oi_ratio'] = old_ce_pe_oi_ratio
 
                 self.current_data_analysis['ce_curr_oi'] = ce_token_data['oi']
                 self.current_data_analysis['pe_curr_oi'] = pe_token_data['oi']
@@ -212,11 +217,22 @@ class Instrument:
                 self.current_data_analysis['ce_oi_change'] = float(ce_token_data['oi']) - float(ce_oi) if float(ce_oi) > 0.0 else 0.0
                 self.current_data_analysis['pe_oi_change'] = float(pe_token_data['oi']) - float(pe_oi) if float(pe_oi) > 0.0 else 0.0
 
+                self.current_data_analysis['first_ce_oi'] = float(ce_token_data['oi']) / float(first_ce_oi) if float(first_ce_oi) != 0 else 0.0
+                self.current_data_analysis['first_pe_oi'] = float(pe_token_data['oi']) / float(first_pe_oi) if float(first_pe_oi) != 0 else 0.0
+
                 self.current_data_analysis['ce_oi_ratio'] = float(ce_token_data['oi']) / float(ce_oi) if float(ce_oi) != 0 else 0.0
                 self.current_data_analysis['pe_oi_ratio'] = float(pe_token_data['oi']) / float(pe_oi) if float(pe_oi) != 0 else 0.0
 
-                self.current_data_analysis['ce_pe_oi_ratio'] = float(ce_token_data['oi']) / float(pe_token_data['oi']) if float(pe_token_data['oi']) != 0 else 0.0
-                self.current_data_analysis['pe_ce_oi_ratio'] = float(pe_token_data['oi']) / float(ce_token_data['oi']) if float(ce_token_data['oi']) != 0 else 0.0
+                curr_old_ce_pe_oi_ratio = self.current_data_analysis['ce_pe_oi_ratio'] if 'ce_pe_oi_ratio' in self.current_data_analysis else 0.0
+                ce_pe_oi_ratio = float(ce_token_data['oi']) / float(pe_token_data['oi']) if float(pe_token_data['oi']) != 0 else 0.0
+                pe_ce_oi_ratio = float(pe_token_data['oi']) / float(ce_token_data['oi']) if float(ce_token_data['oi']) != 0 else 0.0
+                
+                self.current_data_analysis['ce_pe_oi_ratio'] = ce_pe_oi_ratio
+                self.current_data_analysis['pe_ce_oi_ratio'] = pe_ce_oi_ratio
+
+                ratio_changes = (ce_pe_oi_ratio - curr_old_ce_pe_oi_ratio) * 100 / curr_old_ce_pe_oi_ratio if curr_old_ce_pe_oi_ratio != 0 else 0.0
+                self.current_data_analysis['change_in_pe_ce_oi_ratio'] = round(ratio_changes, 4)
+
 
     def print_analysis_details(self, should_save = True):
         # Create DataFrame with the desired columns
@@ -228,7 +244,6 @@ class Instrument:
             bullish = 'Bullish' if self.momentum_result['is_bullish'] else '-'
             bearish = 'Bearish' if self.momentum_result['is_bearish'] else '-'
             print_df.loc[len(print_df)] = ["Candle Pattern", '|', bullish, '|', bearish]
-            print_df.loc[len(print_df)] = ["CE-PE Beta", '|', self.momentum_result['ce_beta'], '|', self.momentum_result['pe_beta']]
             
         # Add rows from current_data_analysis
         if self.current_data_analysis:
@@ -239,12 +254,13 @@ class Instrument:
             ]
             ce_oi_ratio = f"{self.current_data_analysis['ce_oi_ratio']:.4f}".rstrip('0').rstrip('.')
             pe_oi_ratio = f"{self.current_data_analysis['pe_oi_ratio']:.4f}".rstrip('0').rstrip('.')
-            print_df.loc[len(print_df)] = ["OI Ratio", '|', ce_oi_ratio, '|', pe_oi_ratio]
-            print_df.loc[len(print_df)] = ["CE-PE OI Ratio", '|', self.current_data_analysis['ce_pe_oi_ratio'], '|', self.current_data_analysis['pe_ce_oi_ratio']]
+            print_df.loc[len(print_df)] = ["OI Change Ratio", '|', ce_oi_ratio, '|', pe_oi_ratio]
+            print_df.loc[len(print_df)] = ["CE-PE OI Ratio", '|', self.current_data_analysis['ce_pe_oi_ratio'], '|', '-']
+            print_df.loc[len(print_df)] = ["Change in CE-PE OI Ratio (%)", '|', self.current_data_analysis['change_in_pe_ce_oi_ratio'], '|', '-']
 
         print_df.loc[len(print_df)] = ["----------------", '|', "------", '|', "------"]
         # Display the DataFrame nicely
-        # print(print_df)
+        print(print_df)
 
         date = self.momentum_result['date'] if self.momentum_result else ''
         direction = self.market_trend['direction']
@@ -253,8 +269,8 @@ class Instrument:
     
         columns_order = [
             'unique_key', 'date', 'is_bullish', 'is_bearish', 'direction',
-            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi',
-            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi',
+            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi', 'first_ce_oi',
+            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi', 'first_pe_oi',
             'ce_curr_oi', 'pe_curr_oi'
         ]
         if self.momentum_result and self.current_data_analysis:
@@ -269,10 +285,12 @@ class Instrument:
                 'ce_beta': self.momentum_result['ce_beta'],
                 'ce_oi': self.momentum_result['ce_oi'],
                 'old_ce_oi': self.momentum_result['old_ce_oi'],
+                'first_ce_oi': self.momentum_result['first_ce_oi'],
                 'pe_token': self.momentum_result['pe_token'],
                 'pe_beta': self.momentum_result['pe_beta'],
                 'pe_oi': self.momentum_result['pe_oi'],
                 'old_pe_oi': self.momentum_result['old_pe_oi'],
+                'first_pe_oi': self.momentum_result['first_pe_oi'],
                 'ce_curr_oi': self.current_data_analysis['ce_curr_oi'],
                 'pe_curr_oi': self.current_data_analysis['pe_curr_oi']
             }, ignore_index=True)
@@ -291,7 +309,7 @@ class Instrument:
                 candle_5m['unique_key'] == self.momentum_result['unique_key']
                 and candle_5m['unique_key'] == self.current_data_analysis['unique_key']
             )
-            if check_unique_key: 
+            if check_unique_key and self.current_data_analysis: 
                 candle_5m = self.historical_data_5m.iloc[-1]
                 prev_candle_5m = self.historical_data_5m.iloc[-2]
 
@@ -303,34 +321,31 @@ class Instrument:
                 ce_pe_oi_ratio = self.current_data_analysis['ce_pe_oi_ratio']
 
                 is_baught = False
-                if is_bullish and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
+                if is_bullish and self.current_data_analysis['old_ce_pe_oi_ratio'] != 0.0:
                     on_line = sma_20 + 3 >= candle_5m["low"] or sma_9 + 3 >= candle_5m["low"]
                     if on_line and self.current_data_analysis['pe_oi_ratio'] > 1.0:
-                        if ce_pe_oi_ratio > 1.5:
-                            if self.market_trend['change'] and self.current_data_analysis['old_ce_pe_oi_ratio'] < 1.1:
-                                is_baught = True
-                                print(f'✅ Buy CE (Bullish) at {candle_5m['date']}')
-                                # self.buy_premium('CE', kite_login, live_data, instrument_token, current_time)
+                        if ce_pe_oi_ratio > 1.5 and self.current_data_analysis['old_ce_pe_oi_ratio'] < 0.7:
+                            is_baught = True
+                            print(f'✅ Buy CE (Bullish) at {candle_5m['date']}')
+                            self.buy_premium('CE', kite_login, live_data, instrument_token, current_time)
 
-                elif is_bearish and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
+                elif is_bearish and self.current_data_analysis['old_ce_pe_oi_ratio'] != 0.0:
                     on_line = sma_20 - 3 <= candle_5m["high"] or sma_9 - 3 <= candle_5m["high"]
-                    if on_line and (self.current_data_analysis['ce_oi_ratio'] > 1.0):
-                       if ce_pe_oi_ratio < 0.6:
-                           if self.market_trend['change'] and self.current_data_analysis['old_ce_pe_oi_ratio'] > 0.9:
-                                is_baught = True
-                                print(f'❌ Buy PE (Bearish) at {candle_5m['date']}')
-                                # self.buy_premium('PE', kite_login, live_data, instrument_token, current_time)
+                    if on_line and self.current_data_analysis['ce_oi_ratio'] > 1.0:
+                        if ce_pe_oi_ratio < 0.7 and self.current_data_analysis['old_ce_pe_oi_ratio'] > 1.5:
+                            is_baught = True
+                            print(f'❌ Buy PE (Bearish) at {candle_5m['date']}')
+                            self.buy_premium('PE', kite_login, live_data, instrument_token, current_time)
                             
-                if not is_baught and 'old_ce_pe_oi_ratio' in self.current_data_analysis:
-                    # print([self.current_data_analysis['old_ce_pe_oi_ratio'], sma_20, pre_sma_20 + 1.0, sma_20 > pre_sma_20 + 0.5])
+                if not is_baught and self.current_data_analysis['old_ce_pe_oi_ratio'] != 0.0:
                     if ce_pe_oi_ratio > 1.5 and self.current_data_analysis['old_ce_pe_oi_ratio'] < 0.7:
-                        if sma_20 > pre_sma_20 + 0.5 and self.current_data_analysis['pe_oi_ratio'] > 1.0:
+                        if self.current_data_analysis['pe_oi_ratio'] > 1.0:
                             print(f'✅ Buy CE (Scalping) at {candle_5m['date']}')
-                            # self.buy_premium('CE', kite_login, live_data, instrument_token, current_time, True)
-                    elif ce_pe_oi_ratio < 0.6 and self.current_data_analysis['old_ce_pe_oi_ratio'] > 1.3:
-                        if sma_20 < pre_sma_20 - 0.5 and self.current_data_analysis['ce_oi_ratio'] > 1.0:
+                            self.buy_premium('CE', kite_login, live_data, instrument_token, current_time, True)
+                    elif ce_pe_oi_ratio < 0.7 and self.current_data_analysis['old_ce_pe_oi_ratio'] > 1.5:
+                        if self.current_data_analysis['ce_oi_ratio'] > 1.0:
                             print(f'❌ Buy PE (Scalping) at {candle_5m['date']}')
-                            # self.buy_premium('PE', kite_login, live_data, instrument_token, current_time, True) 
+                            self.buy_premium('PE', kite_login, live_data, instrument_token, current_time, True) 
 
     def buy_premium(self, ce_pe, kite_login, live_data, instrument_token, current_time, scalping = False):
         session_end_dt = datetime(current_time.year, current_time.month, current_time.day, 14, 55)
@@ -375,7 +390,7 @@ class Instrument:
 
                 ce_price = ce_curr_data['price']
 
-                if ce_candle['low'] < ce_price and float(ce_price) - float(stop_loss) <= 20.0:
+                if ce_candle['low'] < ce_price and float(ce_price) - float(stop_loss) <= 25.0:
                     ce_symbol = instrument_token.get_symbol_by_token(ce_token)
                     self.logging.info(f'CE BUY Order: ce_token - {ce_token}, ce_symbol - {ce_symbol}, ce_price - {ce_price}, stop_loss - {stop_loss}')
                     quantity = instrument_token.get_quantity(self.token)
@@ -483,9 +498,9 @@ class Instrument:
             result = self.historical_data_30m[self.historical_data_30m["unique_key"] == unique_key]
             return result.to_dict(orient="records")[0] if not result.empty else None
 
-    def load_historical_test_data(self):
+    def load_historical_test_data(self, unique_key):
         historical_data = HistoricalData(self.setting, self.token, self.logging)
-        self.historical_data_5m  = historical_data.load_5min_data()
+        self.historical_data_5m  = historical_data.load_5min_data(unique_key)
 
     def get_ce_pe_tokens(self, instrument_token, live_data):
         if self.ce_pe_token['ce_token'] and self.ce_pe_token['pe_token'] and (self.reuse_tokens or self.orders):
@@ -576,8 +591,8 @@ class Instrument:
 
         columns_order = [
             'unique_key', 'date', 'is_bullish', 'is_bearish', 'direction',
-            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi',
-            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi',
+            'ce_token', 'ce_beta', 'ce_oi', 'old_ce_oi', 'first_ce_oi',
+            'pe_token', 'pe_beta', 'pe_oi', 'old_pe_oi', 'first_pe_oi'
             'ce_curr_oi', 'pe_curr_oi'
         ]
         
@@ -585,7 +600,7 @@ class Instrument:
         
         try:
             query = """INSERT INTO %s(unique_key, date, is_bullish, is_bearish, direction,
-                        ce_token, ce_beta, ce_oi, old_ce_oi, pe_token, pe_beta, pe_oi, old_pe_oi,
+                        ce_token, ce_beta, ce_oi, old_ce_oi, first_ce_oi, pe_token, pe_beta, pe_oi, old_pe_oi, first_pe_oi,
                         ce_curr_oi, pe_curr_oi) VALUES %%s""" % (table_name)
     
             # Ensure the database connection is established

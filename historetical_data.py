@@ -107,7 +107,7 @@ class HistoricalData:
             if len(full_data) >= self.required_5m_data_count:
                 collected = True
             else:
-                current_time = start_day - timedelta(days = 1)
+                current_time = start_day
             time.sleep(5)
     
         self.logging.info(f"Ended fetching {len(full_data)} data points for {self.token} at {datetime.now()}")

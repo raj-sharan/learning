@@ -4,7 +4,15 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 class Util:
-    
+
+    @staticmethod
+    def generate_time_id(time):
+        if isinstance(time, str):
+            time = pd.to_datetime(time)
+            
+        return (time.hour * 100 +
+                time.minute)
+        
     @staticmethod
     def generate_id(time):
         if isinstance(time, str):

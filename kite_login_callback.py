@@ -48,7 +48,7 @@ class KiteLoginCallback:
                 kite_login = KiteLogin(self.setting, self.logging)
                 if kite_login.connect():
                     self.continue_app = False
-                    return "Collected to kite"
+                    return "Connected to kite"
                 else:
                     return f"Faled to connect kite using request_token '{request_token}'"
     

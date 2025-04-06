@@ -89,10 +89,12 @@ processed_details = """
     ce_beta DECIMAL(10, 2) NOT NULL,
     ce_oi DECIMAL(10, 2) NOT NULL,
     old_ce_oi DECIMAL(10, 2) NOT NULL,
+    first_ce_oi DECIMAL(10, 2) NOT NULL,
     pe_token BIGINT NOT NULL,
     pe_beta DECIMAL(10, 2) NOT NULL,
     pe_oi DECIMAL(10, 2) NOT NULL,
     old_pe_oi DECIMAL(10, 2) NOT NULL,
+    first_pe_oi DECIMAL(10, 2) NOT NULL,
     ce_curr_oi DECIMAL(10, 2) NOT NULL,
     pe_curr_oi DECIMAL(10, 2) NOT NULL
     );
@@ -118,6 +120,29 @@ tick_details = """
     ON tick_details (token, date);
 """
 
+traning_data = """
+    CREATE TABLE IF NOT EXISTS traning_data (
+    id SERIAL PRIMARY KEY,
+    unique_key BIGINT NOT NULL,
+    date TIMESTAMP NOT NULL,
+    time BIGINT NOT NULL,
+    direction INT NOT NULL,
+    ce_pe_oi_ratio DECIMAL(10, 2) NOT NULL,
+    prev_ce_pe_oi_ratio DECIMAL(10, 2) NOT NULL,
+    ce_beta DECIMAL(10, 2) NOT NULL,
+    ce_oi_change DECIMAL(10, 2) NOT NULL,
+    pre_ce_oi_change DECIMAL(10, 2) NOT NULL,
+    first_ce_oi_change DECIMAL(10, 2) NOT NULL,
+    pe_beta DECIMAL(10, 2) NOT NULL,
+    pe_oi_change DECIMAL(10, 2) NOT NULL,
+    pre_pe_oi_change DECIMAL(10, 2) NOT NULL,
+    first_pe_oi_change DECIMAL(10, 2) NOT NULL,
+    state INT NOT NULL,
+    action INT NOT NULL
+    );
+"""
+
+
 setting = Setting()
 
 
@@ -127,7 +152,7 @@ s = db.connect(auto = True)
 print(s)
     
 # db.create_database("sharemarkets")
-db.create_tables(processed_details)
+db.create_tables(traning_data)
 
 db.close()
 

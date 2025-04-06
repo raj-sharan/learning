@@ -254,8 +254,8 @@ class MarketOrder:
         if not (self.sl_order_id and instrument.momentum_result and instrument.refresh_till_5m):
             return False
 
-        if self.scalping and self.exceed_time():
-            return True
+        # if self.scalping and self.exceed_time():
+        #     return True
             
         if not (self.order_placed_at and instrument.current_data_analysis and instrument.current_data_analysis.get('unique_key')):
             return False
@@ -269,8 +269,8 @@ class MarketOrder:
             pe_oi_ratio = instrument.current_data_analysis['pe_oi_ratio']
             ce_pe_oi_ratio = instrument.current_data_analysis['ce_pe_oi_ratio']
     
-            # if datetime.now() <= self.order_placed_at + timedelta(minutes=15):
-            #     return False
+            if datetime.now() <= self.order_placed_at + timedelta(minutes = 20):
+                return False
     
             current_time = datetime.now()
             if not (current_time > instrument.refresh_till_5m and current_time - instrument.refresh_till_5m < timedelta(minutes=5)):
@@ -292,17 +292,10 @@ class MarketOrder:
             close, pre_low, pre_high = candle_5m['close'], pre_candle_5m['low'], pre_candle_5m['high']
     
             if self.is_ce():
-                if self.scalping and ce_pe_oi_ratio <= 1.1:
+                if (pre_low - 1.0 > close or is_bearish) and ce_pe_oi_ratio < 1.2:
                     return True
-                elif (pre_low - 1.0 > close and (abs(ce_beta) > abs(pe_beta) + 1.0 or pe_oi_ratio < 1.0)) or is_bearish or ce_pe_oi_ratio < 1.2:
+            elif (close > pre_high + 1.0 or is_bullish) and ce_pe_oi_ratio > 0.8:
                     return True
-                # return pe_oi_ratio < 1.0 or is_bearish or ce_oi_ratio > 1.0
-            else:
-                if self.scalping and ce_pe_oi_ratio >= 0.9:
-                    return True
-                elif (close > pre_high + 1.0 and (abs(pe_beta) > abs(ce_beta) + 1.0 or ce_oi_ratio < 1.0)) or is_bullish or ce_pe_oi_ratio > 0.8:
-                    return True
-                # return ce_oi_ratio < 1.0 or is_bullish or pe_oi_ratio > 1.0
     
         except Exception as e:
             self.logging.error(f"Error in is_trend_discontinues: {e}")
