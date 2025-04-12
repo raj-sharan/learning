@@ -33,11 +33,6 @@ class AiDataGenerator:
         old_ce_oi = row['old_ce_oi']
         return round(curr_ce_oi / old_ce_oi if old_ce_oi != 0 else 0.0, 4)
 
-    def first_ce_oi_change(self, row, first_ce_oi):
-        curr_ce_oi = row['ce_curr_oi']
-        old_ce_oi = first_ce_oi #row['first_ce_oi']
-        return round(curr_ce_oi / old_ce_oi if old_ce_oi != 0 else 0.0, 4)
-
     def pe_oi_change(self, row):
         curr_pe_oi = row['pe_curr_oi']
         old_pe_oi = row['pe_oi']
@@ -46,11 +41,6 @@ class AiDataGenerator:
     def pre_pe_oi_change(self, row):
         curr_pe_oi = row['pe_curr_oi']
         old_pe_oi = row['old_pe_oi']
-        return round(curr_pe_oi / old_pe_oi if old_pe_oi != 0 else 0.0, 4)
-
-    def first_pe_oi_change(self, row, first_pe_oi):
-        curr_pe_oi = row['pe_curr_oi']
-        old_pe_oi = first_pe_oi #row['first_pe_oi']
         return round(curr_pe_oi / old_pe_oi if old_pe_oi != 0 else 0.0, 4)
 
     def determine_action(self, row):
@@ -73,8 +63,6 @@ class AiDataGenerator:
             """ % (data_table, from_unique_key, to_unique_key)
             
             data_df = self.db_conn.get_records_in_data_frame(query)
-            first_ce_oi = data_df['ce_curr_oi'][data_df['ce_curr_oi'] != 0].iloc[0]
-            first_pe_oi = data_df['pe_curr_oi'][data_df['pe_curr_oi'] != 0].iloc[0]
 
             data_df['time'] = data_df.apply(lambda row: Util.generate_time_id(row["date"]), axis=1)
             
@@ -82,12 +70,9 @@ class AiDataGenerator:
             data_df['prev_ce_pe_oi_ratio'] = data_df.apply(self.prev_ce_pe_oi_ratio, axis=1)
             data_df['ce_oi_change'] = data_df.apply(self.ce_oi_change, axis=1)
             data_df['pre_ce_oi_change'] = data_df.apply(self.pre_ce_oi_change, axis=1)
-            data_df['first_ce_oi_change'] = data_df.apply(lambda row: self.first_ce_oi_change(row, first_ce_oi), axis=1)
-            #data_df.apply(self.first_ce_oi_change(first_ce_oi), axis=1)
+        
             data_df['pe_oi_change'] = data_df.apply(self.pe_oi_change, axis=1)
             data_df['pre_pe_oi_change'] = data_df.apply(self.pre_pe_oi_change, axis=1)
-            data_df['first_pe_oi_change'] = data_df.apply(lambda row: self.first_pe_oi_change(row, first_pe_oi), axis=1)
-            #data_df.apply(self.first_pe_oi_change(first_pe_oi), axis=1)
 
             data_df['state'] = data_df.apply(self.determine_action, axis=1)
             data_df['action'] = data_df.apply(self.determine_action, axis=1)
@@ -98,6 +83,8 @@ class AiDataGenerator:
                 self.logging.error("Please the delete file 'traning_data.csv' first, Already exists")
         except Exception as e:
             self.logging.error(f"Error in processing data for traning: {e}")
+            self.logging.error(traceback.format_exc())
+            
         finally:
             if self.db_conn is not None:
                 self.db_conn.close()
@@ -159,7 +146,7 @@ class AiDataGenerator:
         data_df["state"] = data_df.apply(self.encode_state, axis=1)
 
         if self.save_data_to_db(data_df):
-            self.logging.error("Saved traning data")
+            self.logging.info("Saved traning data")
         else:
             self.logging.error("Failed to save traning data")
         
@@ -169,16 +156,16 @@ class AiDataGenerator:
 
         columns_order = [
             'unique_key', 'date', 'time', 'direction', 'ce_pe_oi_ratio', 'prev_ce_pe_oi_ratio',
-            'ce_beta', 'ce_oi_change', 'pre_ce_oi_change', 'first_ce_oi_change',
-            'pe_beta', 'pe_oi_change', 'pre_pe_oi_change', 'first_pe_oi_change', 'state', 'action'
+            'ce_beta', 'ce_oi_change', 'pre_ce_oi_change',
+            'pe_beta', 'pe_oi_change', 'pre_pe_oi_change', 'state', 'action'
         ]
         
         df = df[columns_order]
         
         try:
             query = """INSERT INTO %s(unique_key, date, time, direction, ce_pe_oi_ratio, prev_ce_pe_oi_ratio,
-                        ce_beta, ce_oi_change, pre_ce_oi_change, first_ce_oi_change,
-                        pe_beta, pe_oi_change, pre_pe_oi_change, first_pe_oi_change, state, action) VALUES %%s""" % (traning_data_table)
+                        ce_beta, ce_oi_change, pre_ce_oi_change,
+                        pe_beta, pe_oi_change, pre_pe_oi_change, state, action) VALUES %%s""" % (traning_data_table)
     
             # Ensure the database connection is established
             self.db_conn.connect()
@@ -209,8 +196,8 @@ class AiDataGenerator:
             
             self.db_conn.connect()
             query = """SELECT unique_key, date, time, direction, ce_pe_oi_ratio, prev_ce_pe_oi_ratio,
-                        ce_beta, ce_oi_change, pre_ce_oi_change, first_ce_oi_change,
-                        pe_beta, pe_oi_change, pre_pe_oi_change, first_pe_oi_change, state, action FROM %s
+                        ce_beta, ce_oi_change, pre_ce_oi_change,
+                        pe_beta, pe_oi_change, pre_pe_oi_change, state, action FROM %s
             where unique_key >= %s order by date
             """ % (data_table, from_unique_key)
             

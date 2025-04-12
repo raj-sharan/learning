@@ -127,10 +127,9 @@ class MomentumAnalyser:
             # if len(oi_pe_df["oi"]) >= 2:
             #     print([oi_pe_df["oi"].iloc[-1], oi_pe_df["oi"].iloc[-2], oi_pe_df["oi"].iloc[-1] - oi_pe_df["oi"].iloc[-2]])
             # Calculate the change in OI (last value - previous value)
+        
             result["ce_oi"] = oi_ce_df["oi"].iloc[-1]
             result["pe_oi"] = oi_pe_df["oi"].iloc[-1]
-            result["first_ce_oi"] = oi_ce_df["oi"].iloc[0]
-            result["first_pe_oi"] = oi_pe_df["oi"].iloc[0]
             if len(oi_ce_df["oi"]) >= 2:
                 result["ce_oi_change"] = oi_ce_df["oi"].diff().iloc[-1]
             if len(oi_pe_df["oi"]) >= 2:

@@ -92,7 +92,7 @@ class OrderHandler:
                     
                 if order.should_cancel_position(live_data):  
                     order.cancel_position(self.kite_login)
-                elif False and order.should_place_sl_order(live_data):
+                elif order.should_place_sl_order(live_data):
                     order.place_stop_loss_order(self.kite_login)
                 elif order.invalid_sl_order(live_data):
                     order.cancel_sl_order(self.kite_login)

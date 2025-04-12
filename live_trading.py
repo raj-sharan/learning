@@ -146,7 +146,7 @@ def subscribe_strike_price_tokens(token):
        
 
 def trading_windows(current_time):
-    from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 0)
+    from_dt = datetime(current_time.year, current_time.month, current_time.day, 6, 0)
     to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
@@ -172,9 +172,18 @@ subscribed_list = []
 
 while True:
     current_time = datetime.now()
+    
     if not trading_windows(current_time):
         logging.info("Main thread: Trading session ended")
         exit()
+
+    from_dt = datetime(current_time.year, current_time.month, current_time.day, 9, 15)
+    to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
+
+    if not (to_dt > current_time > from_dt):
+        logging.info("Main thread: Waiting for Trading session start")
+        time.sleep(30)
+        continue
         
     subscribed_list.clear()
 

@@ -204,7 +204,7 @@ class MarketOrder:
                     
                 if self.candle:
                     if self.sl_price is None:
-                        self.sl_price = self.candle['low'] * 1.0 - 5.0
+                        self.sl_price = self.candle['low'] * 1.0 - 7.0
                     date = self.candle['date']
                     if isinstance(date, str):
                         date = datetime.fromisoformat(date)
@@ -292,9 +292,9 @@ class MarketOrder:
             close, pre_low, pre_high = candle_5m['close'], pre_candle_5m['low'], pre_candle_5m['high']
     
             if self.is_ce():
-                if (pre_low - 1.0 > close or is_bearish) and ce_pe_oi_ratio < 1.2:
+                if (pre_low - 1.0 > close or is_bearish) and ce_pe_oi_ratio < 1.6:
                     return True
-            elif (close > pre_high + 1.0 or is_bullish) and ce_pe_oi_ratio > 0.8:
+            elif (close > pre_high + 1.0 or is_bullish) and ce_pe_oi_ratio > 0.6:
                     return True
     
         except Exception as e:
