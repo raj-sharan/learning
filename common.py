@@ -6,6 +6,15 @@ import pandas as pd
 class Util:
 
     @staticmethod
+    def generate_date_id(time):
+        if isinstance(time, str):
+            time = pd.to_datetime(time)
+            
+        return (time.year * 10000 +
+                time.month * 100 +
+                time.day)
+        
+    @staticmethod
     def generate_time_id(time):
         if isinstance(time, str):
             time = pd.to_datetime(time)

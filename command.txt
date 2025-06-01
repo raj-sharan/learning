@@ -11,5 +11,6 @@ http://localhost:8888/
 
 to access postgres
 psql -U postgres
-\c <database>
+\l #list databases
+\c <database> #use database
 \dt for showing tables

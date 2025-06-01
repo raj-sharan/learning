@@ -110,36 +110,31 @@ def subscribe_strike_price_tokens(token):
     global subscribe_tokens
     subscribe_tokens.clear()
 
+    order_tokens = []
     if token in instruments.keys():
         for order_token in instruments[token].order_ids():
+            order_tokens.append(token)
             subscribe_tokens.append(order_token)
-        if instruments[token].order_ids() or instruments[token].reuse_tokens:
-            if instruments[token].ce_pe_token['ce_token']:
-                subscribe_tokens.append(instruments[token].ce_pe_token['ce_token'])
-            if instruments[token].ce_pe_token['pe_token']:
-                subscribe_tokens.append(instruments[token].ce_pe_token['pe_token'])
+        # if instruments[token].order_ids():
+        #     if instruments[token].ce_pe_token['ce_token']:
+        #         subscribe_tokens.append(instruments[token].ce_pe_token['ce_token'])
+        #     if instruments[token].ce_pe_token['pe_token']:
+        #         subscribe_tokens.append(instruments[token].ce_pe_token['pe_token'])
 
-    price_tokens = instrument_token.strike_price_tokens(token, live_data.get_current_data(token))
+    order_striks = []
+    if order_tokens:
+        order_strikes = instrument_token.get_strike_price(order_tokens)
+        
+    price_tokens = instrument_token.strike_price_tokens(token, live_data.get_current_data(token), order_striks)
     if price_tokens is None:
         return []
     
-    ce_tokens = price_tokens.get('ce_tokens', [])
-    pe_tokens = price_tokens.get('pe_tokens', [])
+    tokens = price_tokens.get('token_list', [])
     
-    ce_tokens = [
-        token for item in ce_tokens
-        if (token := instrument_token.get_token_by_symbol(item)) is not None
-    ]
-    
-    pe_tokens = [
-        token for item in pe_tokens
-        if (token := instrument_token.get_token_by_symbol(item)) is not None
-    ]
-    
-    subscribe_tokens = list(set(ce_tokens + pe_tokens + subscribe_tokens))
+    subscribe_tokens = list(set(tokens + subscribe_tokens))
 
     if subscribe_tokens:
-        logging.info(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
+        logging.debug(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
         kws.subscribe(subscribe_tokens)
         kws.set_mode(kws.MODE_FULL, subscribe_tokens)
     return subscribe_tokens
@@ -188,6 +183,7 @@ while True:
     subscribed_list.clear()
 
     print("============================================ * In Trading session * =================================================")
+    logging.info(f"Time: {current_time}")
     
     live_data.to_s()
 
@@ -217,7 +213,7 @@ while True:
                 for token in instruments.keys():
                     instruments[token].refresh_data(kite_login, current_time)
                     instruments[token].load_momentum_analysis(kite_login, live_data, instrument_token, current_time)
-                    instruments[token].load_current_data_analysis(live_data, instrument_token)
+                    instruments[token].load_current_data_analysis(live_data, instrument_token, current_time)
                     instruments[token].print_analysis_details()
                     if not instruments[token].order_ids():
                         instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
@@ -226,7 +222,7 @@ while True:
             order_handler.cancel_invalid_sl_orders(live_data, instruments)
             
             # Unsubscribe unused tokens
-            unused_tokens = set(kws.subscribed_tokens.keys()) - set(subscribed_list)
+            # unused_tokens = set(kws.subscribed_tokens.keys()) - set(subscribed_list)
             # kws.unsubscribe(list(unused_tokens))
         except Exception as e:
             logging.error(f"Error on loop: {e}")
@@ -237,4 +233,4 @@ while True:
         kws.close()
         kws.connect(threaded=True)
     
-    time.sleep(5)  # Main loop delay 10 sec
+    time.sleep(4)  # Main loop delay 10 sec

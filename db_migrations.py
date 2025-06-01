@@ -14,10 +14,10 @@ historical_test_data_5m_sql = """
         token BIGINT NOT NULL,
         date TIMESTAMP NOT NULL,
         unique_key BIGINT NOT NULL,
-        open DECIMAL(10, 2) NOT NULL,
-        high DECIMAL(10, 2) NOT NULL,
-        low DECIMAL(10, 2) NOT NULL,
-        close DECIMAL(10, 2) NOT NULL,
+        open DECIMAL(10, 4) NOT NULL,
+        high DECIMAL(10, 4) NOT NULL,
+        low DECIMAL(10, 4) NOT NULL,
+        close DECIMAL(10, 4) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (token, unique_key)
     );
@@ -37,10 +37,10 @@ historical_data_5m_sql = """
         token BIGINT NOT NULL,
         date TIMESTAMP NOT NULL,
         unique_key BIGINT NOT NULL,
-        open DECIMAL(10, 2) NOT NULL,
-        high DECIMAL(10, 2) NOT NULL,
-        low DECIMAL(10, 2) NOT NULL,
-        close DECIMAL(10, 2) NOT NULL,
+        open DECIMAL(10, 4) NOT NULL,
+        high DECIMAL(10, 4) NOT NULL,
+        low DECIMAL(10, 4) NOT NULL,
+        close DECIMAL(10, 4) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (token, unique_key)
     );
@@ -60,10 +60,10 @@ historical_data_30m_sql = """
         token BIGINT NOT NULL,
         date TIMESTAMP NOT NULL,
         unique_key BIGINT NOT NULL,
-        open DECIMAL(10, 2) NOT NULL,
-        high DECIMAL(10, 2) NOT NULL,
-        low DECIMAL(10, 2) NOT NULL,
-        close DECIMAL(10, 2) NOT NULL,
+        open DECIMAL(10, 4) NOT NULL,
+        high DECIMAL(10, 4) NOT NULL,
+        low DECIMAL(10, 4) NOT NULL,
+        close DECIMAL(10, 4) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (token, unique_key)
     );
@@ -82,19 +82,21 @@ processed_details = """
     id SERIAL PRIMARY KEY,
     unique_key BIGINT NOT NULL,
     date TIMESTAMP NOT NULL,
-    is_bullish BOOL NOT NULL DEFAULT FALSE,
-    is_bearish BOOL NOT NULL DEFAULT FALSE,
+    trend TEXT NOT NULL,
     direction TEXT NOT NULL,
-    ce_token BIGINT NOT NULL,
-    ce_beta DECIMAL(10, 2) NOT NULL,
-    ce_oi DECIMAL(10, 2) NOT NULL,
-    old_ce_oi DECIMAL(10, 2) NOT NULL,
-    pe_token BIGINT NOT NULL,
-    pe_beta DECIMAL(10, 2) NOT NULL,
-    pe_oi DECIMAL(10, 2) NOT NULL,
-    old_pe_oi DECIMAL(10, 2) NOT NULL,
-    ce_curr_oi DECIMAL(10, 2) NOT NULL,
-    pe_curr_oi DECIMAL(10, 2) NOT NULL
+    signal TEXT NOT NULL,
+    last_price DECIMAL(10, 4) NOT NULL,
+    candle TEXT NOT NULL,
+    nearest_strike BIGINT NOT NULL,
+    nearest_pe_oi BIGINT NOT NULL,
+    nearest_ce_oi BIGINT NOT NULL,
+    nearest_pcr DECIMAL(10, 4) NOT NULL,
+    nearest_gap DECIMAL(10, 4) NOT NULL,
+    next_strike BIGINT NOT NULL,
+    next_pe_oi BIGINT NOT NULL,
+    next_ce_oi BIGINT NOT NULL,
+    next_pcr DECIMAL(10, 4) NOT NULL,
+    next_gap DECIMAL(10, 4) NOT NULL
     );
 """
 
@@ -104,8 +106,8 @@ tick_details = """
         token BIGINT NOT NULL,
         unique_key BIGINT NOT NULL,
         date TIMESTAMP NOT NULL,
-        last_price DECIMAL(10, 2) NOT NULL,
-        oi DECIMAL(10, 2) NOT NULL,
+        last_price DECIMAL(10, 4) NOT NULL,
+        oi BIGINT NOT NULL,
         volume_traded BIGINT NOT NULL,
         bid_volume BIGINT NOT NULL,
         offer_volume BIGINT NOT NULL,
@@ -118,23 +120,46 @@ tick_details = """
     ON tick_details (token, date);
 """
 
+tick_details_copy = """
+    CREATE TABLE IF NOT EXISTS tick_details_copy (
+        id SERIAL PRIMARY KEY,
+        token BIGINT NOT NULL,
+        unique_key BIGINT NOT NULL,
+        date TIMESTAMP NOT NULL,
+        last_price DECIMAL(10, 4) NOT NULL,
+        oi BIGINT NOT NULL,
+        volume_traded BIGINT NOT NULL,
+        bid_volume BIGINT NOT NULL,
+        offer_volume BIGINT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (token, date)
+    );
+    
+    -- Add an index on (token, date) for faster date-based queries
+    CREATE INDEX tick_details_copy_token_date 
+    ON tick_details_copy (token, date);
+"""
+
 traning_data = """
     CREATE TABLE IF NOT EXISTS traning_data (
     id SERIAL PRIMARY KEY,
     unique_key BIGINT NOT NULL,
     date TIMESTAMP NOT NULL,
-    time BIGINT NOT NULL,
-    direction INT NOT NULL,
-    ce_pe_oi_ratio DECIMAL(10, 2) NOT NULL,
-    prev_ce_pe_oi_ratio DECIMAL(10, 2) NOT NULL,
-    ce_beta DECIMAL(10, 2) NOT NULL,
-    ce_oi_change DECIMAL(10, 2) NOT NULL,
-    pre_ce_oi_change DECIMAL(10, 2) NOT NULL,
-    pe_beta DECIMAL(10, 2) NOT NULL,
-    pe_oi_change DECIMAL(10, 2) NOT NULL,
-    pre_pe_oi_change DECIMAL(10, 2) NOT NULL,
-    state INT NOT NULL,
-    action INT NOT NULL
+    trend TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    signal TEXT NOT NULL,
+    last_price DECIMAL(10, 4) NOT NULL,
+    candle TEXT NOT NULL,
+    nearest_strike BIGINT NOT NULL,
+    nearest_pe_oi BIGINT NOT NULL,
+    nearest_ce_oi BIGINT NOT NULL,
+    nearest_pcr DECIMAL(10, 4) NOT NULL,
+    nearest_gap DECIMAL(10, 4) NOT NULL,
+    next_strike BIGINT NOT NULL,
+    next_pe_oi BIGINT NOT NULL,
+    next_ce_oi BIGINT NOT NULL,
+    next_pcr DECIMAL(10, 4) NOT NULL,
+    next_gap DECIMAL(10, 4) NOT NULL
     );
 """
 
@@ -148,7 +173,7 @@ s = db.connect(auto = True)
 print(s)
     
 # db.create_database("sharemarkets")
-db.create_tables(processed_details)
+db.create_tables(tick_details_copy)
 
 db.close()
 

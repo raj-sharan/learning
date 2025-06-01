@@ -113,7 +113,7 @@ def subscribe_strike_price_tokens(token):
     if token in instruments.keys():
         for order_token in instruments[token].order_ids():
             subscribe_tokens.append(order_token)
-        if instruments[token].order_ids() or instruments[token].reuse_tokens:
+        if instruments[token].order_ids():
             if instruments[token].ce_pe_token['ce_token']:
                 subscribe_tokens.append(instruments[token].ce_pe_token['ce_token'])
             if instruments[token].ce_pe_token['pe_token']:
@@ -123,24 +123,12 @@ def subscribe_strike_price_tokens(token):
     if price_tokens is None:
         return []
     
-    ce_tokens = price_tokens.get('ce_tokens', [])
-    pe_tokens = price_tokens.get('pe_tokens', [])
+    tokens = price_tokens.get('token_list', [])
     
-    ce_tokens = [
-        token for item in ce_tokens
-        if (token := instrument_token.get_token_by_symbol(item)) is not None
-    ]
-    
-    pe_tokens = [
-        token for item in pe_tokens
-        if (token := instrument_token.get_token_by_symbol(item)) is not None
-    ]
-    
-    subscribe_tokens = ce_tokens + pe_tokens
-        
+    subscribe_tokens = list(set(tokens + subscribe_tokens))
 
     if subscribe_tokens:
-        logging.info(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
+        logging.debug(f"subscribe_tokens: {instrument_token.get_symbols_from_tokens(subscribe_tokens)}")
         # kws.subscribe(subscribe_tokens)
         # kws.set_mode(kws.MODE_FULL, subscribe_tokens)
     return subscribe_tokens
@@ -158,8 +146,8 @@ def trading_windows(current_time):
     to_dt = datetime(current_time.year, current_time.month, current_time.day, 15, 31)
     return from_dt < current_time < to_dt
 
-start_time = datetime.now() #- timedelta(days = 1)
-start_time = datetime(start_time.year, start_time.month, start_time.day, 9, 15)
+start_time = datetime.now() #- timedelta(days = 2)
+start_time = datetime(start_time.year, start_time.month, start_time.day, 11, 29)
 unique_key = Util.generate_5m_id(start_time)
 # Reload data for all tokens
 for token in tokens:
@@ -179,7 +167,7 @@ subscribed_list = []
 live_data_loaded_at = start_time
 current_time = start_time 
 while True:
-    current_time = current_time + timedelta(seconds = 30)
+    current_time = current_time + timedelta(seconds = 60)
     if not trading_windows(current_time):
         logging.info("Main thread: Trading session ended")
         exit()
@@ -187,7 +175,8 @@ while True:
     subscribed_list.clear()
 
     print(f"{current_time}===================================== * In Test Trading session * =================================================")
-    
+    logging.info(f"Time: {current_time}")
+
     live_data.to_s()
 
     try:
@@ -215,8 +204,8 @@ while True:
             for token in instruments.keys():
                 instruments[token].refresh_data(kite_login, current_time)
                 instruments[token].load_momentum_analysis(kite_login, live_data, instrument_token, current_time)
-                instruments[token].load_current_data_analysis(live_data, instrument_token)
-                instruments[token].print_analysis_details(False)
+                instruments[token].load_current_data_analysis(live_data, instrument_token, current_time)
+                instruments[token].print_analysis_details(True)
                 if not instruments[token].order_ids():
                     instruments[token].execute_trade_opportunity(kite_login, live_data, instrument_token, current_time)
                     
@@ -232,4 +221,4 @@ while True:
             kite_login.connect()
         logging.error(traceback.format_exc())
     
-    time.sleep(1)  # Main loop delay 10 sec
+    time.sleep(3)  # Main loop delay 10 sec

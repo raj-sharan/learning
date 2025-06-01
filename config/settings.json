@@ -1,22 +1,21 @@
 {
-    "api_key"     : "*********",
-    "api_secret"  : "*********",
-    "kite_id"     : "*********",
+    "api_key"     : "********",
+    "api_secret"  : "********",
+    "kite_id"     : "********",
     "securities"  : {
-        "256265"  : {
-            "token": 0
-            "symbol": "*********",
-            "index" : 0
-            "quantity": 0
+        "14536962"  : {
+            "token": 0,
+            "symbol": "********",
+            "index" : true,
+            "quantity": 0,
             "price_step": 0
         }
     },
-    "manage_position" : 0
-    "db_name"     : "*********",
-    "db_username" : "*********",
-    "db_password" : "*********",
-    "db_host"     : "*********",
-    "db_port"     : "*********",
-    "table_name_5m"  : "*********",
-    "table_name_30m" : "*********"
+    "manage_position" : true,
+    "selling"     : false,
+    "db_password" : "********",
+    "db_host"     : "********",
+    "db_port"     : "********",
+    "table_name_5m"  : "********",
+    "table_name_30m" : "********"
 }

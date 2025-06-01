@@ -1,5 +1,20 @@
 from datetime import datetime
 
+def single_shooting_star(index, data):
+    candle      = data.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 15.0
+    body = open - close
+
+    return (close < open and candle_length and body > 5.0 and
+            high - open > body * 2.0 and
+            close - low <= body * 0.2)
+    
 def is_shooting_star(index, data):
     candle      = data.iloc[index]
     prev_candle = data.iloc[index-1]
@@ -22,6 +37,21 @@ def is_shooting_star(index, data):
             min(close, open) - low <= abs(open - close))
 
 
+def single_hammer(index, data):
+    candle      = data.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 15.0
+    body = close - open
+
+    return (close > open and candle_length and body > 5.0 and
+            open - low > body * 2 and
+            high - close <= body * 0.2)
+            
 def is_hammer(index, data):
     candle = data.iloc[index]
     prev_candle = data.iloc[index-1]
@@ -68,7 +98,7 @@ def is_bearish_engulfing(index, data):
     prev_low_2   = prev_candle_2["low"]
 
     return (open >= prev_close - 5.0 and prev_close > prev_open and
-            open > close and valid_body and close < prev_low + 0.5 and
+            open > close and valid_body and close < prev_low - 0.5 and
             prev_close_2 > prev_open_2 and
             open - close > prev_close - prev_open and prev_close > prev_close_2)
 
@@ -234,9 +264,71 @@ def is_bearish_marubozu(index, data):
     return (lower_wick <= max_allowed_wick_down and upper_wick <= max_allowed_wick_up and
             close < open and cur_candle_body and pre_candle_body and pre_candle_body_2)
 
+def bullish_candle(index, data):
+    candle = data.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 20.0
+    body = close - open
+
+    return (close > open and candle_length and body > 10.0 and
+            (high - close <= body or open - low > body))
+
+def bearish_candle(index, data):
+    candle = data.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 20.0
+    body = open - close
+
+    return (close < open and candle_length and body > 10.0 and
+            (close - low <= body or high - close > body))
+
+def is_candle_valid_for_buy(index, df):
+    candle = df.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 20.0
+    body = close - open
+
+    return (close > open and candle_length and body > 5.0)
+
+def is_candle_valid_for_sell(index, df):
+    candle = df.iloc[index]
+    
+    close = candle["close"]
+    open  = candle["open"]
+    high  = candle["high"]
+    low   = candle["low"]
+
+    candle_length = high - low > 20.0
+    body = open - close
+
+    return (close < open and candle_length and body > 5.0)
+    
 
 def valid_bulish_patterns(index, df):
     return is_hammer(index, df) or is_bullish_engulfing(index, df) or is_bullish_marubozu(index, df) or is_bullish_three_inside_up(index, df)
 
 def valid_bearish_patterns(index, df):
     return is_shooting_star(index, df) or is_bearish_engulfing(index, df) or is_bearish_marubozu(index, df) or is_bearish_three_inside_down(index, df)
+
+def is_bullish_candle(index, df):
+    return single_hammer(index, df) or bullish_candle(index, df)
+
+def is_bearish_candle(index, df):
+    return single_shooting_star(index, df) or bearish_candle(index, df)
+    
+    

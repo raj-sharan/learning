@@ -1,3 +1,5 @@
+import random
+
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -9,26 +11,26 @@ class LiveData:
         self.instruments_data = {}  # Initialized as an empty dictionary
         self.order_updated = False
         self.analyser = MomentumAnalyser(setting, logging)
-    
+        
     def collect_instruments_data(self, ticks):
         self.analyser.load_ticks(ticks)
+        max_len = 5
         
         for tick in ticks:
             token = tick["instrument_token"]
             price = tick["last_price"]
-            volume_traded = tick['volume_traded'] if 'volume_traded' in tick else 0
-            bid_volume, offer_volume = self.analyser.fetch_bid_offer_volume(tick)
+        
             oi = tick['oi'] if 'oi' in tick else 0
             
             if token not in self.instruments_data:
                 self.instruments_data[token] = {}
-            
+    
             self.instruments_data[token]['price'] = price
             self.instruments_data[token]['time'] = datetime.now()  # Update time on new data
-            self.instruments_data[token]['volume_traded'] = volume_traded
+            self.instruments_data[token]['volume_traded'] = 0
             self.instruments_data[token]['oi'] = oi
-            self.instruments_data[token]['bid_volume'] = bid_volume
-            self.instruments_data[token]['offer_volume'] = offer_volume
+            self.instruments_data[token]['bid_volume'] = 0
+            self.instruments_data[token]['offer_volume'] = 0
 
     def to_s(self):
         flag = 1
@@ -58,4 +60,5 @@ class LiveData:
         
     #     data_5m[time_id]
 		
-        
+    def random_lakh_value(self, min_lakhs=1, max_lakhs=100):
+        return random.randint(min_lakhs * 100000, max_lakhs * 100000)
